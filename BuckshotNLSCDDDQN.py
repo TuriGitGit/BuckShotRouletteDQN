@@ -11,18 +11,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"U
 
 """
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.9"
-QUANT = 3
-GAMMA = 0.999                       # discount factor    
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.10"
 #EPSILON = 0.1                         # exploration rate
 #EPDECAY = 0.99999                 # exploration decay rate
 #EPMIN = 0.02                        # minimum exploration rate
-LR = 0.0005                         # learning rate
-BATCH_SIZE = 128                     # how many samples to take from memory
-MEMORY_SIZE = 100_000               # how many steps to store in memory
 UPDATE_STEPS = 300                  # update target network every n steps
 STEPS = 1_000_000                   # total steps to train
-EPISODES = 650_536                  # suggest setting this to some very high value, may remove later
 EVAL_RATIO = 10                    # evaluate every n episodes
 EVAL_EPSIODES = 2                   # evaluate n episodes
 
@@ -56,7 +50,6 @@ class NoisyLinear(nn.Module):
         bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
         return torch.nn.functional.linear(x, weight, bias)
     
-
 class NLSCDDDQN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
@@ -166,7 +159,6 @@ class DuelingDDQN(nn.Module):
         q_values = value + advantage
         return q_values
 
-
 class DQNAgent:
     def __init__(self, inputs, outputs):
         self.inputs = inputs
@@ -174,11 +166,11 @@ class DQNAgent:
         self.memory_size = 100_000
         self.batch_size = 128
         #self.epsilon = EPSILON
-        self.lr = 0.0005
+        self.lr = 0.0006
 
         self.memory = deque(maxlen=self.memory_size)
-        self.model = NLSCDDDQN(inputs, outputs, [128, 128]).to(device)
-        self.target_model = NLSCDDDQN(inputs, outputs, [128, 128]).to(device)
+        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True).to(device)
+        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.loss_fn = nn.MSELoss().to(device)
         self.updateTargetNetwork()
@@ -214,7 +206,7 @@ class DQNAgent:
         q_values = self.model(states).gather(1, actions).squeeze()
         with torch.no_grad():
             max_next_q_values = self.target_model(next_states).max(1)[0]
-            target_q_values = rewards + (1 - dones) * GAMMA * max_next_q_values
+            target_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
 
         loss = self.loss_fn(q_values, target_q_values)
         self.optimizer.zero_grad()
@@ -246,14 +238,7 @@ def loadModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
         agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         steps = checkpoint['steps']
         print(f"Model loaded from {model_path}")
-    else:
-        print(f"Model not found in {model_path}")
-
-def resetGame():
-    pass
-
-def printGame():
-    pass
+    else: raise Exception(f"Model not found in {model_path}")
 
 # Game loop
 def playGame(agent, train=True):
@@ -275,7 +260,7 @@ agent = DQNAgent((1+1+1+(8+8)+(8+8)+1+1+1), (6+2)); lastSteps = 0
 #inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
 #outputs: [item actions, shoot who = end token]
 # 1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
-for e in range(EPISODES):
+while True:
     if (e+1) % EVAL_RATIO == 0:
         _steps = steps
         for ep in range(EVAL_EPSIODES):
@@ -296,7 +281,7 @@ class Game():
         """Initializes the game state and shotgun."""
         self.max_shells = 8
         self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num, self.round = 0
-        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:glass 3:smoke 4:inverter 5:cuffs 6:saw
+        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:glass 3:smoke 4:inverter 5:cuffs 6:saw (phone is omitted)
         self.AI_can_play, self.DEALER_can_play = True
         self.AI_hp, self.DEALER_hp = 4
         self.invert_odds, self.is_sawed = False
@@ -552,7 +537,6 @@ class Game():
         if cantCheat: dontCheat()
         elif canCheat: normalCheat()
         else: superCheat()
-
 
 """
 # Main game loop
