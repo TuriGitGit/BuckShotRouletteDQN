@@ -250,7 +250,8 @@ def playGame(agent, train=True):
     while running:
         pass
 
-agent = DQNAgent((1+1+1+(8+8)+(8+8)+1+1+1), (6+2)); lastSteps = 0
+#                (1+1+1+(8+8)+(8+8)+1+1+1), (6+2)
+agent = DQNAgent(38), (8); lastSteps = 0
 #inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
 #outputs: [item actions, shoot who = end token]
 # 1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
