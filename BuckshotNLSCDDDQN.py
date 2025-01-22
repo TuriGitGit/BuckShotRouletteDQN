@@ -269,7 +269,6 @@ def playGame(agent, train=True):
 
     state = getState()
 
-
     running = True
     while running:
         pass
@@ -295,17 +294,13 @@ for e in range(EPISODES):
 """
 
 
-
-MAX_SHELLS = 8
 running = True
-DEBUG =  True
 
 class Game():
     def __init__(self):
         """Initializes the game state and shotgun."""
-        self.max_shells = MAX_SHELLS
-        self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num = 0
-        self.round = 0
+        self.max_shells = 8
+        self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num, self.round = 0
         self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:glass 3:smoke 4:inverter 5:cuffs 6:saw
         self.AI_can_play, self.DEALER_can_play = True
         self.AI_hp, self.DEALER_hp = 4
@@ -313,27 +308,27 @@ class Game():
 
         self.resetShells()
         print("Game initialized!")
-    #####################################################################
+    
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
-        self.live_shells, self.blank_shells = random.randint(1, MAX_SHELLS//2), random.randint(1, MAX_SHELLS//2)
+        self.live_shells, self.blank_shells = random.randint(1, self.max_shells//2), random.randint(1, self.max_shells//2)
         self.shells = self.totalShells()
         self.current_round_num = 0
-    #####################################################################
+    
     def totalShells(self): return self.live_shells + self.blank_shells
-    #####################################################################
+    
     def determineShell(self):
         """Determines the type of shell in the current chamber, returns 1 for live and 0.5 for blank."""
         return 1 if random.random() <= (self.live_shells/self.shells) else 0.5
-    #####################################################################
+    
     def riggedDetermine(self, live: bool):
         """Determines the shell to be the chosen shell"""
         return 1 if live else 0.5
-    #####################################################################
+    
     def removeShell(self, live: bool):
         if live: self.live_shells -= 1
         else: self.blank_shells -= 1
-    #####################################################################
+    
     def resetGame(self):
         """Resets the game state, initializes the shotgun, and loads bullets."""
         self.resetShells()
@@ -341,12 +336,11 @@ class Game():
         self.DEALER_items = []
         self.AI_hp = 4
         self.DEALER_hp = 4
-
-        print("Game reset!")
-    #####################################################################
+    
     def printGame(self):
         """Prints the current game state for visualization."""
-    #####################################################################
+        #WIP
+    
     def debugPrintGame(self):
         """Prints the current game state for debugging and visualization."""
         print(f"Current Round: {self.round}")
@@ -356,9 +350,10 @@ class Game():
         print(f"AI Items: {self.AI_items}")
         print(f"DEALER Items: {self.DEALER_items}")
         print(f"Current Round Number: {self.current_round_num}")
-        print(f"Is SAWed?: {self.is_sawed}")
+        print(f"Is sawed?: {self.is_sawed}")
         print(f"Invert Odds?: {self.invert_odds}")
-    #####################################################################
+        #WIP
+    
     def restockItems(self):
         """Restocks the round for the AI and DEALER."""
         for _ in range(self.round*2):
@@ -369,18 +364,15 @@ class Game():
             if len(self.DEALER_items) < 8:
                 self.DEALER_items.append(random.randint(1, 6)) 
                 print("DEALER round: ", self.DEALER_items)
-    #####################################################################
+    
     def drinkBeer(self, player: str):
         """Player drinks beer, returns reward"""
         if self.totalShells == 1:
-            raise Exception("are wii gunna have a problem?")
+            raise Exception("are wii gunna have a problem?") #WIP
         def removeUnknownShell():
             if random.randint(0, 1) == 1 and self.live_shells > 0:
                 self.live_shells -= 1
-            elif self.blank_shells > 0:
-                self.blank_shells -= 1
-            else:
-                raise Exception("No more shells!, this error should never happen")
+            else: self.blank_shells -= 1
 
         if player == "AI":
             if 1 in self.AI_items:
@@ -389,11 +381,11 @@ class Game():
                 elif self.shell == 1: self.live_shells -= 1
                 else: self.blank_shells -= 1
                 return 0.5
-            else: return -3
+            else: return -1
         else:
             if 1 in self.DEALER_items:
                 self.DEALER_items.remove(1)
-    #####################################################################        
+            
     def breakGlass(self, player: str):
         """Player breaks glass, determining shell, returns reward"""
         if player == "AI":
@@ -401,11 +393,11 @@ class Game():
                 self.AI_items.remove(2)
                 self.shell = self.determineShell()
                 return 1
-            else: return -3
+            else: return -1
         else:
             if 2 in self.DEALER_items:
                 self.DEALER_items.remove(2)           
-    #####################################################################
+    
     def smoke(self, player: str):
         """Player smokes, regains 1 hp, returns reward"""
         if player == "AI":
@@ -413,12 +405,12 @@ class Game():
                 self.AI_items.remove(3)
                 self.AI_hp = min(4, self.AI_hp+1)
                 return 1
-            else: return -3
+            else: return -1
         else:
             if 3 in self.DEALER_items:
                 self.DEALER_items.remove(3)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
-    #####################################################################
+    
     def inverter(self, player: str):
         """Player inverts current round, returns reward"""
         def invert():
@@ -433,11 +425,11 @@ class Game():
                 elif self.shell == 1: self.blank_shells+=1; self.live_shells-=1
                 invert()
                 return 0.3
-            else: return -3
+            else: return -1
         else:
             if 4 in self.DEALER_items:
                 self.DEALER_items.remove(4)
-    #####################################################################
+    
     def cuff(self, player: str):
         """Player cuffs opponent, skipping their turn, returns reward"""
         if player == "AI":
@@ -445,12 +437,12 @@ class Game():
                 self.AI_items.remove(5)
                 self.DEALER_can_play = False
                 return 1
-            else: return -3
+            else: return -1
         else:
             if 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
                 self.AI_can_play = False
-    #####################################################################
+    
     def saw(self, player: str):
         """Player saws off shotgun, doubling damage, returns reward"""
         if player == "AI":
@@ -458,12 +450,12 @@ class Game():
                 self.AI_items.remove(6)
                 self.is_sawed = True
                 return 1 if self.shell != 0.5 else -2
-            else: return -3
+            else: return -1
         else:
             if 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
                 self.is_sawed = True
-    #####################################################################
+    
     def AIshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI, returns reward"""
         if self.shell == 0:
@@ -475,10 +467,10 @@ class Game():
 
         elif self.shell == 0.5: return 2 if self.is_sawed == False else -8
         
-        elif self.shell == 1:
+        else:
             if self.is_sawed == False: self.AI_hp -= 1; return -20
             else: self.is_sawed = False; self.AI_hp -= 2; return -40
-    #####################################################################    
+        
     def AIshootDEALER(self, shell):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward"""
         if shell == 0:
@@ -492,30 +484,27 @@ class Game():
             if self.is_sawed == False: self.DEALER_hp -= 1; return 4
             else: self.is_sawed = False; self.DEALER_hp -= 2; return 8
         
-        elif shell == 0.5: 
-            if self.is_sawed == False:
-                return -20 
+        else:
+            if self.is_sawed == False: return -20 
             else: self.is_sawed = False; return -32
-    #####################################################################
+    
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER"""
-        if shell == 0.5:
-            self.AI_can_play = False
+        if shell == 0.5: self.AI_can_play = False
 
-        elif shell == 0: # shell is unknown
+        elif shell == 0:
             shell = self.determineShell()
-            if shell == 1: # shell is live
+            if shell == 1:
                 self.DEALER_hp -= 1
-    #####################################################################
+    
     def DEALERshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI"""
         if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
 
-        elif shell == 0: # shell is unknown
+        else:
             shell = self.determineShell()
-            if shell == 1: # shell is live
-                self.AI_hp -= 1 if self.is_sawed == False else 2
-    #####################################################################
+            if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
+    
     def DEALERALGO(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
         shells = self.blank_shells and self.live_shells
@@ -525,7 +514,7 @@ class Game():
 
         def DEALERSmoke():
             """the DEALER smokes as many times as possible, stopping if he is at max hp"""
-            for i in range(self.DEALER_items.count(3)):
+            for _ in range(self.DEALER_items.count(3)):
                 if self.DEALER_hp == 4: break
                 self.smoke("DEALER")
 
@@ -539,7 +528,7 @@ class Game():
         
         def superCheat():
             """The SUPER cheating DEALER Algorithm, it makes the round blank, (uses magnifiying glass if it has one), smokes if it can, then it shoots itself; 
-             it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
+                it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
             self.riggedDetermine(live=False)
             self.breakGlass("DEALER")
             DEALERSmoke()
@@ -550,7 +539,6 @@ class Game():
             self.saw("DEALER")
             self.cuff("DEALER")
             self.DEALERshootAI()
-
 
         def dontCheat():
             """the simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
@@ -577,14 +565,11 @@ class Game():
 
 
 """
-
-
 # Main game loop
 def playGame():
     resetGame()
     while running:
         pass
-
 
 # Play the game
 playGame()
