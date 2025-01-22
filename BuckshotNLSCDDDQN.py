@@ -6,17 +6,12 @@ import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 
-# Initialize
 steps = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-array = [0,1,2,3,4]
-
-print(array)
-
 """
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.2.1"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.8"
 QUANT = 3
 GAMMA = 0.999                       # discount factor    
 #EPSILON = 0.1                         # exploration rate
@@ -30,11 +25,6 @@ STEPS = 1_000_000                   # total steps to train
 EPISODES = 650_536                  # suggest setting this to some very high value, may remove later
 EVAL_RATIO = 10                    # evaluate every n episodes
 EVAL_EPSIODES = 2                   # evaluate n episodes
-SKIPPEDFRAMES = 4                   # must >=2
-
-MAX_SHELLS = 8
-
-
 
 
 class NoisyLinear(nn.Module):
@@ -182,15 +172,12 @@ class DQNAgent:
     def __init__(self, inputs, outputs):
         self.inputs = inputs
         self.outputs = outputs
-        self.memory_size = MEMORY_SIZE
-        self.batch_size = BATCH_SIZE
+        self.memory_size = 100_000
+        self.batch_size = 128
         #self.epsilon = EPSILON
-        self.lr = LR
+        self.lr = 0.0005
 
         self.memory = deque(maxlen=self.memory_size)
-
-
-
         self.model = NLSCDDDQN(inputs, outputs, [128, 128]).to(device)
         self.target_model = NLSCDDDQN(inputs, outputs, [128, 128]).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
@@ -305,16 +292,11 @@ for e in range(EPISODES):
     lastSteps = steps
 
     if steps >= STEPS: saveModel(agent); break
-
-
 """
 
 
 
-
-
-# Define global variables for the game state
-MAX_SHELLS = 8  # Number of chambers in the shotgun
+MAX_SHELLS = 8
 running = True
 DEBUG =  True
 
@@ -338,8 +320,7 @@ class Game():
         self.shells = self.totalShells()
         self.current_round_num = 0
     #####################################################################
-    def totalShells(self):
-        return self.live_shells + self.blank_shells
+    def totalShells(self): return self.live_shells + self.blank_shells
     #####################################################################
     def determineShell(self):
         """Determines the type of shell in the current chamber, returns 1 for live and 0.5 for blank."""
@@ -485,38 +466,36 @@ class Game():
     #####################################################################
     def AIshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI, returns reward"""
-        if self.shell == 0: # shell is unknown
+        if self.shell == 0:
             self.shell = self.determineShell()
-            if self.shell == 1: # shell is live
+            if self.shell == 1:
                 self.AI_hp -= 1 if self.is_sawed == False else 2
                 return -3 if self.is_sawed == False else -6 
-            else: return 0 if self.is_sawed == False else -2 # shell is blank
+            else: return 0 if self.is_sawed == False else -2
 
-        elif self.shell == 0.5: return 2 if self.is_sawed == False else -8 # ai knows shell is blank
+        elif self.shell == 0.5: return 2 if self.is_sawed == False else -8
         
         elif self.shell == 1:
             if self.is_sawed == False: self.AI_hp -= 1; return -20
-            else: self.is_sawed = False; self.AI_hp -= 2; return -40 # ai knew it was live, sawed off the gun to deal double damage and then shot itself, smartn't
+            else: self.is_sawed = False; self.AI_hp -= 2; return -40
     #####################################################################    
     def AIshootDEALER(self, shell):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward"""
-        if shell == 0: # shell is unknown
+        if shell == 0:
             shell = self.determineShell()
-            if shell == 1: # shell is live
+            if shell == 1:
                 if self.is_sawed == False: self.DEALER_hp -= 1; return 3
                 else: self.is_sawed = False; self.DEALER_hp -= 2; return 6
-            else: return 0 # shell is blank
+            else: return 0
 
         elif shell == 1:
             if self.is_sawed == False: self.DEALER_hp -= 1; return 4
-            else: self.is_sawed = False; self.DEALER_hp -= 2; return 8 # ai knows shell is live
+            else: self.is_sawed = False; self.DEALER_hp -= 2; return 8
         
         elif shell == 0.5: 
             if self.is_sawed == False:
                 return -20 
-            else: self.is_sawed = False; return -32 #ai knew it was blank, sawed off the gun, and shot the DEALER, punish the hell out of it, it doesnt deserve to live
-
-        else: raise Exception("WHY DOES SHELL == NaN??!?!")
+            else: self.is_sawed = False; return -32
     #####################################################################
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER"""
@@ -538,7 +517,7 @@ class Game():
                 self.AI_hp -= 1 if self.is_sawed == False else 2
     #####################################################################
     def DEALERALGO(self):
-        """The DEALER Algorithm used in place of a real dealer, it's shit and has to cheat to make up for it, but it efficiently trains the AI"""
+        """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
         shells = self.blank_shells and self.live_shells
         canSuperCheat = (random.random() < 0.1) and shells
         canCheat = (random.random() < 0.3) and shells and not canSuperCheat
@@ -565,7 +544,7 @@ class Game():
             self.breakGlass("DEALER")
             DEALERSmoke()
             self.DEALERshootDEALER()
-            #
+
             self.riggedDetermine(live=True)
             self.breakGlass("DEALER")
             self.saw("DEALER")
@@ -574,7 +553,7 @@ class Game():
 
 
         def dontCheat():
-            """the simple algorithm for the DEALER, its horrible, it randomly guesses if it is live or blank and then plans accordingly, its often wrong"""
+            """the simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
             def guessLive():
                 self.drinkBeer()
                 self.inverter()
@@ -592,13 +571,9 @@ class Game():
             if random.random() < 0.5: guessLive()
             else: guessBlank()
 
-
-
         if cantCheat: dontCheat()
-
         elif canCheat: normalCheat()
-        elif canSuperCheat: superCheat()
-        else: raise Exception("How did we get here?")
+        else: superCheat()
 
 
 """
