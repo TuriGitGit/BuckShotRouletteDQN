@@ -11,11 +11,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"U
 
 """
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.11"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.12"
 #EPSILON = 0.1                         # exploration rate
 #EPDECAY = 0.99999                 # exploration decay rate
 #EPMIN = 0.02                        # minimum exploration rate
-UPDATE_STEPS = 300                  # update target network every n steps ?
+UPDATE_STEPS = 300                  # update target network every n steps ????????
 
 
 class NoisyLinear(nn.Module):
@@ -160,8 +160,8 @@ class DQNAgent:
     def __init__(self, inputs, outputs):
         self.inputs = inputs
         self.outputs = outputs
-        self.memory_size = 100_000
-        self.batch_size = 128
+        self.memory_size = 150_000
+        self.batch_size = 256
         #self.epsilon = EPSILON
         self.lr = 0.0006
 
@@ -210,7 +210,7 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-def saveModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
+def saveModel(agent, filename=f"{AI_VERSION_NAME}_{steps}.pth"):
     if not os.path.exists("models"):
         os.makedirs("models")
         
@@ -220,7 +220,6 @@ def saveModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
         'optimizer_state_dict': agent.optimizer.state_dict(),
         'steps': steps,
     }, model_path)
-    print(f"Model saved to {model_path}")
 
 def loadModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
     if not os.path.exists("models"):
@@ -237,18 +236,17 @@ def loadModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
         print(f"Model loaded from {model_path}")
     else: raise Exception(f"Model not found in {model_path}")
 
-# Game loop
 def playGame(agent, train=True):
-
     resetGame()
 
     def getState():
-        flattened_state = np.array( dtype=np.float32)
+        flattened_state = np.array(
+        , #WIP
+        dtype=np.float32)
         print(flattened_state)
         return flattened_state
 
     state = getState()
-
     running = True
     while running:
         pass
@@ -267,7 +265,6 @@ while True:
     else: playGame(agent)
 
     lastSteps = steps
-
     if steps >= 1_000_000: saveModel(agent); break
 """
 
