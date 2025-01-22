@@ -11,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"U
 
 """
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.8"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.9"
 QUANT = 3
 GAMMA = 0.999                       # discount factor    
 #EPSILON = 0.1                         # exploration rate
@@ -123,7 +123,6 @@ class NLSCDDDQN(nn.Module):
         q_values = value + advantage
         return q_values
 
-
 class DuelingDDQN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,skip_connections: list = [], activation: nn.Module = nn.ReLU()):
         super(DuelingDDQN, self).__init__()
@@ -222,7 +221,6 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-
 def saveModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
     if not os.path.exists("models"):
         os.makedirs("models")
@@ -272,8 +270,6 @@ def playGame(agent, train=True):
     running = True
     while running:
         pass
-        
-
 
 agent = DQNAgent((1+1+1+(8+8)+(8+8)+1+1+1), (6+2)); lastSteps = 0
 #inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
@@ -292,7 +288,6 @@ for e in range(EPISODES):
 
     if steps >= STEPS: saveModel(agent); break
 """
-
 
 running = True
 
@@ -365,16 +360,17 @@ class Game():
                 self.DEALER_items.append(random.randint(1, 6)) 
                 print("DEALER round: ", self.DEALER_items)
     
-    def drinkBeer(self, player: str):
+    def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward"""
         if self.totalShells == 1:
-            raise Exception("are wii gunna have a problem?") #WIP
+            raise Exception("are wii gunna have a problem?") 
+            #WIP
         def removeUnknownShell():
             if random.randint(0, 1) == 1 and self.live_shells > 0:
                 self.live_shells -= 1
             else: self.blank_shells -= 1
 
-        if player == "AI":
+        if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
                 if self.shell == 0: removeUnknownShell()
@@ -386,9 +382,9 @@ class Game():
             if 1 in self.DEALER_items:
                 self.DEALER_items.remove(1)
             
-    def breakGlass(self, player: str):
+    def magnifier(self, player: bool = False):
         """Player breaks glass, determining shell, returns reward"""
-        if player == "AI":
+        if player:
             if 2 in self.AI_items:
                 self.AI_items.remove(2)
                 self.shell = self.determineShell()
@@ -398,9 +394,9 @@ class Game():
             if 2 in self.DEALER_items:
                 self.DEALER_items.remove(2)           
     
-    def smoke(self, player: str):
+    def smoke(self, player: bool = False):
         """Player smokes, regains 1 hp, returns reward"""
-        if player == "AI":
+        if player:
             if 3 in self.AI_items:
                 self.AI_items.remove(3)
                 self.AI_hp = min(4, self.AI_hp+1)
@@ -411,14 +407,14 @@ class Game():
                 self.DEALER_items.remove(3)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
     
-    def inverter(self, player: str):
+    def inverter(self, player: bool = False):
         """Player inverts current round, returns reward"""
         def invert():
             if self.shell == 0.5: self.shell = 1
             elif self.shell == 1: self.shell = 0.5
             else: self.invert_odds = True
 
-        if player == "AI":
+        if player:
             if 4 in self.AI_items:
                 self.AI_items.remove(4)
                 if self.shell == 0.5: self.blank_shells-=1; self.live_shells+=1
@@ -430,9 +426,9 @@ class Game():
             if 4 in self.DEALER_items:
                 self.DEALER_items.remove(4)
     
-    def cuff(self, player: str):
+    def cuff(self, player: bool = False):
         """Player cuffs opponent, skipping their turn, returns reward"""
-        if player == "AI":
+        if player:
             if 5 in self.AI_items:
                 self.AI_items.remove(5)
                 self.DEALER_can_play = False
@@ -443,9 +439,9 @@ class Game():
                 self.DEALER_items.remove(5)
                 self.AI_can_play = False
     
-    def saw(self, player: str):
+    def saw(self, player: bool = False):
         """Player saws off shotgun, doubling damage, returns reward"""
-        if player == "AI":
+        if player:
             if 6 in self.AI_items:
                 self.AI_items.remove(6)
                 self.is_sawed = True
@@ -510,28 +506,28 @@ class Game():
             """the DEALER smokes as many times as possible, stopping if he is at max hp"""
             for _ in range(self.DEALER_items.count(3)):
                 if self.DEALER_hp == 4: break
-                self.smoke("DEALER")
+                self.smoke()
 
         def normalCheat():
             """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI"""
             self.riggedDetermine(live=True)
-            self.breakGlass("DEALER")
+            self.magnifier()
             DEALERSmoke()
-            self.cuff("DEALER")
+            self.cuff()
             self.DEALERshootAI()
         
         def superCheat():
             """The SUPER cheating DEALER Algorithm, it makes the round blank, (uses magnifiying glass if it has one), smokes if it can, then it shoots itself; 
                 it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
             self.riggedDetermine(live=False)
-            self.breakGlass("DEALER")
+            self.magnifier()
             DEALERSmoke()
             self.DEALERshootDEALER()
 
             self.riggedDetermine(live=True)
-            self.breakGlass("DEALER")
-            self.saw("DEALER")
-            self.cuff("DEALER")
+            self.magnifier()
+            self.saw()
+            self.cuff()
             self.DEALERshootAI()
 
         def dontCheat():
