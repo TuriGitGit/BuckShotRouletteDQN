@@ -11,14 +11,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"U
 
 """
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.10"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.11"
 #EPSILON = 0.1                         # exploration rate
 #EPDECAY = 0.99999                 # exploration decay rate
 #EPMIN = 0.02                        # minimum exploration rate
-UPDATE_STEPS = 300                  # update target network every n steps
-STEPS = 1_000_000                   # total steps to train
-EVAL_RATIO = 10                    # evaluate every n episodes
-EVAL_EPSIODES = 2                   # evaluate n episodes
+UPDATE_STEPS = 300                  # update target network every n steps ?
 
 
 class NoisyLinear(nn.Module):
@@ -261,17 +258,17 @@ agent = DQNAgent((1+1+1+(8+8)+(8+8)+1+1+1), (6+2)); lastSteps = 0
 #outputs: [item actions, shoot who = end token]
 # 1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
 while True:
-    if (e+1) % EVAL_RATIO == 0:
+    if (e+1) % 10 == 0:
         _steps = steps
-        for ep in range(EVAL_EPSIODES):
+        for ep in range(20)):
             playGame(agent, train=False)
-        print(f"{(steps-lastSteps)//(EVAL_EPSIODES)}")
+        print(f"{(steps-lastSteps)//(20)}")
         steps = _steps
     else: playGame(agent)
 
     lastSteps = steps
 
-    if steps >= STEPS: saveModel(agent); break
+    if steps >= 1_000_000: saveModel(agent); break
 """
 
 running = True
