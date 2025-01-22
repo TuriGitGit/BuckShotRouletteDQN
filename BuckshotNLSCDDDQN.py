@@ -464,9 +464,7 @@ class Game():
                 self.AI_hp -= 1 if self.is_sawed == False else 2
                 return -3 if self.is_sawed == False else -6 
             else: return 0 if self.is_sawed == False else -2
-
         elif self.shell == 0.5: return 2 if self.is_sawed == False else -8
-        
         else:
             if self.is_sawed == False: self.AI_hp -= 1; return -20
             else: self.is_sawed = False; self.AI_hp -= 2; return -40
@@ -479,11 +477,9 @@ class Game():
                 if self.is_sawed == False: self.DEALER_hp -= 1; return 3
                 else: self.is_sawed = False; self.DEALER_hp -= 2; return 6
             else: return 0
-
         elif shell == 1:
             if self.is_sawed == False: self.DEALER_hp -= 1; return 4
             else: self.is_sawed = False; self.DEALER_hp -= 2; return 8
-        
         else:
             if self.is_sawed == False: return -20 
             else: self.is_sawed = False; return -32
@@ -491,7 +487,6 @@ class Game():
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER"""
         if shell == 0.5: self.AI_can_play = False
-
         elif shell == 0:
             shell = self.determineShell()
             if shell == 1:
@@ -500,7 +495,6 @@ class Game():
     def DEALERshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI"""
         if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
-
         else:
             shell = self.determineShell()
             if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
