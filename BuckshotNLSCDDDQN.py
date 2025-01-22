@@ -9,7 +9,7 @@ from collections import deque
 steps = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-"""
+
 # hyperparameters
 AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.12"
 #EPSILON = 0.1                         # exploration rate
@@ -51,7 +51,7 @@ class NLSCDDDQN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
                  use_noisy: bool = False, fully_noisy: bool = False, noise_std_init: float = 0.4):
-        """ """
+        """
         Modular implementation of a Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
         ------------- \n
         Parameters: \n
@@ -59,7 +59,7 @@ class NLSCDDDQN(nn.Module):
         Optional NLSC (noisy, fully noisy, noise, skip connections) \n
         Misc (activation) \n
         ------------- \n
-        """ """
+        """
         super(NLSCDDDQN, self).__init__()
         self.hidden_dims = hidden_dims
         self.activation = activation
@@ -237,12 +237,11 @@ def loadModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
     else: raise Exception(f"Model not found in {model_path}")
 
 def playGame(agent, train=True):
-    resetGame()
-
     def getState():
         flattened_state = np.array(
-        , #WIP
-        dtype=np.float32)
+            #WIP
+            dtype=np.float32
+        )
         print(flattened_state)
         return flattened_state
 
@@ -256,9 +255,9 @@ agent = DQNAgent((1+1+1+(8+8)+(8+8)+1+1+1), (6+2)); lastSteps = 0
 #outputs: [item actions, shoot who = end token]
 # 1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
 while True:
-    if (e+1) % 10 == 0:
+    if (1+1) % 10 == 0:
         _steps = steps
-        for ep in range(20)):
+        for ep in range(20):
             playGame(agent, train=False)
         print(f"{(steps-lastSteps)//(20)}")
         steps = _steps
@@ -266,7 +265,7 @@ while True:
 
     lastSteps = steps
     if steps >= 1_000_000: saveModel(agent); break
-"""
+
 
 running = True
 
@@ -474,7 +473,7 @@ class Game():
             shell = self.determineShell()
             if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
     
-    def DEALERALGO(self):
+    def DEALERalgo(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
         shells = self.blank_shells and self.live_shells
         canSuperCheat = (random.random() < 0.1) and shells
@@ -482,7 +481,7 @@ class Game():
         cantCheat = not canCheat and not canSuperCheat
 
         def DEALERSmoke():
-            """the DEALER smokes as many times as possible, stopping if he is at max hp"""
+            """The DEALER smokes as many times as possible, stopping if he is at max hp"""
             for _ in range(self.DEALER_items.count(3)):
                 if self.DEALER_hp == 4: break
                 self.smoke()
@@ -510,7 +509,7 @@ class Game():
             self.DEALERshootAI()
 
         def dontCheat():
-            """the simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
+            """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
             def guessLive():
                 self.drinkBeer()
                 self.inverter()
