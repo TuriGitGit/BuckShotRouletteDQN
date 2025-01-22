@@ -6,12 +6,11 @@ import torch.nn as nn
 import torch.optim as optim
 from collections import deque
 
-steps = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
 
 # hyperparameters
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.12"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.13"
 #EPSILON = 0.1                         # exploration rate
 #EPDECAY = 0.99999                 # exploration decay rate
 #EPMIN = 0.02                        # minimum exploration rate
@@ -158,12 +157,14 @@ class DuelingDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
+        self.self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
         self.memory_size = 150_000
         self.batch_size = 256
         #self.epsilon = EPSILON
         self.lr = 0.0006
+        
 
         self.memory = deque(maxlen=self.memory_size)
         self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True).to(device)
@@ -210,7 +211,8 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-def saveModel(agent, filename=f"{AI_VERSION_NAME}_{steps}.pth"):
+def saveModel(agent, filename):
+    filename = f"{AI_VERSION_NAME}_{agent.steps}.pth"
     if not os.path.exists("models"):
         os.makedirs("models")
         
@@ -218,21 +220,21 @@ def saveModel(agent, filename=f"{AI_VERSION_NAME}_{steps}.pth"):
     torch.save({
         'model_state_dict': agent.model.state_dict(),
         'optimizer_state_dict': agent.optimizer.state_dict(),
-        'steps': steps,
+        'self.steps': agent.steps,
     }, model_path)
 
-def loadModel(agent, filename=f"{AI_VERSION_NAME}_steps{steps}.pth"):
+def loadModel(agent, filename):
+    filename = f"{AI_VERSION_NAME}_{agent.steps}.pth"
     if not os.path.exists("models"):
         os.makedirs("models")
         
     model_path = os.path.join("models", filename)
     if os.path.exists(model_path):
-        global steps
         checkpoint = torch.load(model_path)
         agent.model.load_state_dict(checkpoint['model_state_dict'])
         agent.target_model.load_state_dict(checkpoint['model_state_dict'])
         agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        steps = checkpoint['steps']
+        agent.steps = checkpoint['self.steps']
         print(f"Model loaded from {model_path}")
     else: raise Exception(f"Model not found in {model_path}")
 
@@ -250,22 +252,25 @@ def playGame(agent, train=True):
     while running:
         pass
 
-#                (1+1+1+(8+8)+(8+8)+1+1+1), (6+2)
+"""
+inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
+outputs: [item actions, shoot who = end token]
+1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
+(1+1+1+(8+8)+(8+8)+1+1+1), (6+2)
+"""
 agent = DQNAgent(38), (8); lastSteps = 0
-#inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
-#outputs: [item actions, shoot who = end token]
-# 1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
+
 while True:
     if (1+1) % 10 == 0:
-        _steps = steps
+        _steps = agent.steps
         for ep in range(20):
             playGame(agent, train=False)
-        print(f"{(steps-lastSteps)//(20)}")
-        steps = _steps
+        print(f"{(agent.steps-lastSteps)//(20)}")
+        agent.steps = _steps
     else: playGame(agent)
 
-    lastSteps = steps
-    if steps >= 1_000_000: saveModel(agent); break
+    lastSteps = agent.steps
+    if agent.steps >= 1_000_000: saveModel(agent); break
 
 
 running = True
