@@ -8,12 +8,9 @@ from collections import deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.4.2"
-
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
         super(NoisyLinear, self).__init__()
-
         self.weight_mu = nn.Parameter(torch.empty(out_features, in_features, device=device))
         self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features, device=device))
         self.bias_mu = nn.Parameter(torch.empty(out_features, device=device))
@@ -40,9 +37,9 @@ class NoisyLinear(nn.Module):
 class NLSCDDDQN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
-                 use_noisy: bool = False, fully_noisy: bool = False, noise_std_init: float = 0.4):
+                 use_noisy: bool = True, fully_noisy: bool = False, noise_std_init: float = 0.4):
         """
-        Modular implementation of a Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
+        Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
         ------------- \n
         Base DDDQN (inputs, outputs, hidden_dims) \n
         Optional NLSC (noisy, fully noisy, noise, skip connections) \n
@@ -56,7 +53,6 @@ class NLSCDDDQN(nn.Module):
         self.use_noisy = True if (use_noisy or fully_noisy) else False
         self.hidden_layers = nn.ModuleList()
         self.skip_projections = nn.ModuleList()
-
         prev_dim = input_dim
         for hidden_dim in hidden_dims:
             layer = NoisyLinear(prev_dim, hidden_dim, std_init=noise_std_init) if fully_noisy else nn.Linear(prev_dim, hidden_dim, device=device)
@@ -86,11 +82,7 @@ class NLSCDDDQN(nn.Module):
                             x += projected_input
                         elif outputs[from_layer].shape[1] == x.shape[1]:
                             x += outputs[from_layer]
-                        else:
-                            raise ValueError(
-                                f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} "
-                                f"to current layer with shape {x.shape}"
-                            )
+                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
                 outputs.append(x)
 
         value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features)
@@ -100,6 +92,7 @@ class NLSCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
+        self.name = "Buck_NLSCDDDQN_v0.4.3"
         self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
@@ -126,8 +119,7 @@ class DQNAgent:
 
     def replay(self):
         if len(self.memory) < self.batch_size:
-            #FIX ?
-            return
+            return #FIX ?
 
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
@@ -147,8 +139,8 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-def saveModel(agent, filename):
-    filename = f"{AI_VERSION_NAME}_{agent.steps}.pth"
+def saveModel(self, filename):
+    filename = f"{self.name}_{self.steps}.pth"
     if not os.path.exists("models"):
         os.makedirs("models")
         
@@ -159,8 +151,8 @@ def saveModel(agent, filename):
         'self.steps': agent.steps,
     }, model_path)
 
-def loadModel(agent, filename):
-    filename = f"{AI_VERSION_NAME}_{agent.steps}.pth"
+def loadModel(self, filename):
+    filename = f"{self.name}_{self.steps}.pth"
     if not os.path.exists("models"):
         os.makedirs("models")
         
@@ -213,10 +205,6 @@ class Game():
         self.DEALER_items = []
         self.AI_hp = 4
         self.DEALER_hp = 4
-    
-    def printGame(self):
-        """Prints the current game state for visualization."""
-        #WIP
     
     def debugPrintGame(self):
         """Prints the current game state for debugging and visualization."""
@@ -407,15 +395,18 @@ class Game():
         self.saw()
         self.DEALERshootAI()
         self.drinkBeer()
+
     def guessBlank(self):
         self.drinkBeer()
         self.inverter()
         self.DEALERSmoke()
         self.DEALERshootDEALER()
+
     def dontCheat(self):
         """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
         if random.random() < 0.5: self.guessLive()
         else: self.guessBlank()
+
     def DEALERalgo(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
         shells = self.blank_shells and self.live_shells
