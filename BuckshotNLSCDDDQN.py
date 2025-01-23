@@ -92,7 +92,7 @@ class NLSCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v0.4.3"
+        self.name = "Buck_NLSCDDDQN_v0.4.4"
         self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
@@ -109,8 +109,7 @@ class DQNAgent:
 
     def act(self, state):
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
-        with torch.no_grad():
-            q_values = self.model(state)
+        with torch.no_grad(): q_values = self.model(state)
         return torch.argmax(q_values).item()
 
     def remember(self, state, action, reward, next_state, done):
@@ -133,7 +132,7 @@ class DQNAgent:
         with torch.no_grad():
             max_next_q_values = self.target_model(next_states).max(1)[0]
             target_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
-
+            
         loss = self.loss_fn(q_values, target_q_values)
         self.optimizer.zero_grad()
         loss.backward()
@@ -191,7 +190,7 @@ class Game():
         return 1 if random.random() <= (self.live_shells/self.shells) else 0.5
     
     def riggedDetermine(self, live: bool):
-        """Determines the shell to be the chosen shell"""
+        """Determines the shell to be the chosen shell."""
         return 1 if live else 0.5
     
     def removeShell(self, live: bool):
@@ -234,7 +233,7 @@ class Game():
                 self.live_shells -= 1
             else: self.blank_shells -= 1
     def drinkBeer(self, player: bool = False):
-        """Player drinks beer, returns reward"""
+        """Player drinks beer, returns reward."""
         if self.totalShells == 1:
             raise Exception("are wii gunna have a problem?") 
             #WIP
@@ -251,7 +250,7 @@ class Game():
                 self.DEALER_items.remove(1)
             
     def magnifier(self, player: bool = False):
-        """Player breaks glass, determining shell, returns reward"""
+        """Player breaks glass, determining shell, returns reward."""
         if player:
             if 2 in self.AI_items:
                 self.AI_items.remove(2)
@@ -263,7 +262,7 @@ class Game():
                 self.DEALER_items.remove(2)           
     
     def smoke(self, player: bool = False):
-        """Player smokes, regains 1 hp, returns reward"""
+        """Player smokes, regains 1 hp, returns reward."""
         if player:
             if 3 in self.AI_items:
                 self.AI_items.remove(3)
@@ -280,7 +279,7 @@ class Game():
             elif self.shell == 1: self.shell = 0.5
             else: self.invert_odds = True
     def inverter(self, player: bool = False):
-        """Player inverts current round, returns reward"""
+        """Player inverts current round, returns reward."""
         if player:
             if 4 in self.AI_items:
                 self.AI_items.remove(4)
@@ -294,7 +293,7 @@ class Game():
                 self.DEALER_items.remove(4)
     
     def cuff(self, player: bool = False):
-        """Player cuffs opponent, skipping their turn, returns reward"""
+        """Player cuffs opponent, skipping their turn, returns reward."""
         if player:
             if 5 in self.AI_items:
                 self.AI_items.remove(5)
@@ -307,7 +306,7 @@ class Game():
                 self.AI_can_play = False
     
     def saw(self, player: bool = False):
-        """Player saws off shotgun, doubling damage, returns reward"""
+        """Player saws off shotgun, doubling damage, returns reward."""
         if player:
             if 6 in self.AI_items:
                 self.AI_items.remove(6)
@@ -320,7 +319,7 @@ class Game():
                 self.is_sawed = True
     
     def AIshootAI(self):
-        """Determines the outcome of the shot if not already known, and shoots AI, returns reward"""
+        """Determines the outcome of the shot if not already known, and shoots AI, returns reward."""
         if self.shell == 0:
             self.shell = self.determineShell()
             if self.shell == 1:
@@ -333,7 +332,7 @@ class Game():
             else: self.is_sawed = False; self.AI_hp -= 2; return -40
         
     def AIshootDEALER(self, shell):
-        """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward"""
+        """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward."""
         if shell == 0:
             shell = self.determineShell()
             if shell == 1:
@@ -348,7 +347,7 @@ class Game():
             else: self.is_sawed = False; return -32
     
     def DEALERshootDEALER(self):
-        """Determines the outcome of the shot if not already known, and shoots DEALER"""
+        """Determines the outcome of the shot if not already known, and shoots DEALER."""
         if shell == 0.5: self.AI_can_play = False
         elif shell == 0:
             shell = self.determineShell()
@@ -356,19 +355,19 @@ class Game():
                 self.DEALER_hp -= 1
     
     def DEALERshootAI(self):
-        """Determines the outcome of the shot if not already known, and shoots AI"""
+        """Determines the outcome of the shot if not already known, and shoots AI."""
         if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
         else:
             shell = self.determineShell()
             if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
     def DEALERSmoke(self):
-        """The DEALER smokes as many times as possible, stopping if he is at max hp"""
+        """The DEALER smokes as many times as possible, stopping if he is at max hp."""
         for _ in range(self.DEALER_items.count(3)):
             if self.DEALER_hp == 4: break
             self.smoke()
 
     def normalCheat(self):
-        """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI"""
+        """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI."""
         self.riggedDetermine(live=True)
         self.magnifier()
         self.DEALERSmoke()
@@ -377,7 +376,7 @@ class Game():
         
     def superCheat(self):
         """The SUPER cheating DEALER Algorithm, it makes the round blank, (uses magnifiying glass if it has one), smokes if it can, then it shoots itself; 
-            it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
+            it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI."""
         self.riggedDetermine(live=False)
         self.magnifier()
         self.DEALERSmoke()
@@ -420,10 +419,8 @@ class Game():
 
 def playGame(agent, train=True):
     def getState():
-        flattened_state = np.array(
-            #WIP
-            dtype=np.float32
-        )
+        flattened_state = np.array(#WIP
+            dtype=np.float32)
         print(flattened_state)
         return flattened_state
 
