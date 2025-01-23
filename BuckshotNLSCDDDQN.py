@@ -8,7 +8,7 @@ from collections import deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.14"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.4.1"
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
@@ -18,10 +18,8 @@ class NoisyLinear(nn.Module):
         self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features, device=device))
         self.bias_mu = nn.Parameter(torch.empty(out_features, device=device))
         self.bias_sigma = nn.Parameter(torch.empty(out_features, device=device))
-        
         self.register_buffer("weight_epsilon", torch.empty(out_features, in_features, device=device))
         self.register_buffer("bias_epsilon", torch.empty(out_features, device=device))
-        
         self.std_init = std_init
         self.reset_parameters()
 
@@ -57,8 +55,9 @@ class NLSCDDDQN(nn.Module):
         self.activation = activation
         self.skip_connections = skip_connections
         self.use_noisy = True if (use_noisy or fully_noisy) else False
-
         self.hidden_layers = nn.ModuleList()
+        self.skip_projections = nn.ModuleList()
+
         prev_dim = input_dim
         for hidden_dim in hidden_dims:
             layer = NoisyLinear(prev_dim, hidden_dim, std_init=noise_std_init) if fully_noisy else nn.Linear(prev_dim, hidden_dim, device=device)
@@ -67,16 +66,11 @@ class NLSCDDDQN(nn.Module):
         
         self.value_fc = NoisyLinear(prev_dim, 1, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, 1, device=device)
         self.advantage_fc = NoisyLinear(prev_dim, output_dim, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, output_dim, device=device)
-        
-        self.skip_projections = nn.ModuleList()
 
         if skip_connections:
             for (from_layer, to_layer) in self.skip_connections:
                 if from_layer == 0:
-                    projection_layer = (
-                        NoisyLinear(input_dim, hidden_dims[to_layer - 1])
-                        if fully_noisy else nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device)
-                    )
+                    projection_layer = (NoisyLinear(input_dim, hidden_dims[to_layer - 1]) if fully_noisy else nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
                     self.skip_projections.append(projection_layer)
                 else:
                     self.skip_projections.append(None)
@@ -105,49 +99,6 @@ class NLSCDDDQN(nn.Module):
         q_values = value + advantage
         return q_values
 
-class DuelingDDQN(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,skip_connections: list = [], activation: nn.Module = nn.ReLU()):
-        super(DuelingDDQN, self).__init__()
-        self.hidden_dims = hidden_dims
-        self.activation = activation
-        self.skip_connections = skip_connections
-
-        self.hidden_layers = nn.ModuleList()
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            self.hidden_layers.append(nn.Linear(prev_dim, hidden_dim, device=device))
-            prev_dim = hidden_dim
-        
-        self.value_fc = nn.Linear(prev_dim, 1, device=device)
-        self.advantage_fc = nn.Linear(prev_dim, output_dim, device=device)
-        
-        self.skip_projections = nn.ModuleList()
-
-        if skip_connections:
-            for (from_layer, to_layer) in self.skip_connections:
-                if from_layer == 0: self.skip_projections.append(nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
-                else: self.skip_projections.append(None)
-
-    def forward(self, x):
-        outputs = [x]
-        for i, layer in enumerate(self.hidden_layers):
-            x = self.activation(layer(x))
-            if self.skip_connections:
-                for (from_layer, to_layer) in self.skip_connections:
-                    if to_layer == i+1:
-                        if from_layer == 0:
-                            projected_input = self.skip_projections[0](outputs[from_layer])
-                            x += projected_input
-                        elif outputs[from_layer].shape[1] == x.shape[1]: x += outputs[from_layer]
-                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
-                    
-                outputs.append(x)
-
-        value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features) #posibilidad
-        advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
-        q_values = value + advantage
-        return q_values
-
 class DQNAgent:
     def __init__(self, inputs, outputs):
         self.steps = 0
@@ -156,8 +107,6 @@ class DQNAgent:
         self.memory_size = 150_000
         self.batch_size = 256
         self.lr = 0.0006
-        
-
         self.memory = deque(maxlen=self.memory_size)
         self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
         self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
@@ -168,8 +117,6 @@ class DQNAgent:
     def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
 
     def act(self, state):
-        if np.random.rand() <= self.epsilon:
-            return random.randrange(self.outputs)
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
         with torch.no_grad():
             q_values = self.model(state)
@@ -186,7 +133,6 @@ class DQNAgent:
 
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
-
         states, next_states = np.array(states), np.array(next_states)
         states = torch.FloatTensor(states).to(device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(device)
@@ -231,51 +177,16 @@ def loadModel(agent, filename):
         print(f"Model loaded from {model_path}")
     else: raise Exception(f"Model not found in {model_path}")
 
-def playGame(agent, train=True):
-    def getState():
-        flattened_state = np.array(
-            #WIP
-            dtype=np.float32
-        )
-        print(flattened_state)
-        return flattened_state
-
-    state = getState()
-    #WIP
-    running = True
-    while running:
-        #WIP
-        pass
-    #WIP
-
-agent = DQNAgent(22, 8); lastSteps, e = 0
-while True:
-    e += 1
-    if (e) % 10 == 0:
-        _steps = agent.steps
-        for ep in range(20):
-            playGame(agent, train=False)
-
-        print(f"{(agent.steps - lastSteps) // 20}")
-        agent.steps = _steps
-    else: playGame(agent)
-
-    if agent.steps > 1_000_000: saveModel(agent); break
-
-    lastSteps = agent.steps
-
 running = True
-
 class Game():
     def __init__(self):
         """Initializes the game state and shotgun."""
         self.max_shells = 8
         self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num, self.round = 0
-        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw (phone is omitted)
+        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
         self.AI_can_play, self.DEALER_can_play = True
         self.AI_hp, self.DEALER_hp = 4
         self.invert_odds, self.is_sawed = False
-
         self.resetShells()
     
     def resetShells(self):
@@ -527,13 +438,35 @@ class Game():
         elif canCheat: normalCheat()
         else: superCheat()
 
-"""
-# Main game loop
-def playGame():
-    resetGame()
-    while running:
-        pass
+def playGame(agent, train=True):
+    def getState():
+        flattened_state = np.array(
+            #WIP
+            dtype=np.float32
+        )
+        print(flattened_state)
+        return flattened_state
 
-# Play the game
-playGame()
-"""
+    state = getState()
+    #WIP
+    running = True
+    while running:
+        #WIP
+        pass
+    #WIP
+
+agent = DQNAgent(22, 8); lastSteps, e = 0
+while True:
+    e += 1
+    if (e) % 10 == 0:
+        _steps = agent.steps
+        for ep in range(20):
+            playGame(agent, train=False)
+
+        print(f"{(agent.steps - lastSteps) // 20}")
+        agent.steps = _steps
+    else: playGame(agent)
+
+    if agent.steps > 1_000_000: saveModel(agent); break
+
+    lastSteps = agent.steps
