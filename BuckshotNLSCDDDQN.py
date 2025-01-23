@@ -8,7 +8,7 @@ from collections import deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.13"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.14"
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
@@ -150,12 +150,11 @@ class DuelingDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.self.steps = 0
+        self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
         self.memory_size = 150_000
         self.batch_size = 256
-        #self.epsilon = EPSILON
         self.lr = 0.0006
         
 
@@ -182,6 +181,7 @@ class DQNAgent:
 
     def replay(self):
         if len(self.memory) < self.batch_size:
+            #FIX ?
             return
 
         batch = random.sample(self.memory, self.batch_size)
@@ -241,30 +241,28 @@ def playGame(agent, train=True):
         return flattened_state
 
     state = getState()
+    #WIP
     running = True
     while running:
+        #WIP
         pass
+    #WIP
 
-"""
-inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
-outputs: [item actions, shoot who = end token]
-1: use beer etc. 0: shoot ai(self), 7 shoot dealer(opp)
-(1+1+1+(8+8)+(8+8)+1+1+1), (6+2)
-"""
-agent = DQNAgent(38), (8); lastSteps = 0
-
+agent = DQNAgent(22, 8); lastSteps, e = 0
 while True:
-    if (1+1) % 10 == 0:
+    e += 1
+    if (e) % 10 == 0:
         _steps = agent.steps
         for ep in range(20):
             playGame(agent, train=False)
-        print(f"{(agent.steps-lastSteps)//(20)}")
+
+        print(f"{(agent.steps - lastSteps) // 20}")
         agent.steps = _steps
     else: playGame(agent)
 
-    lastSteps = agent.steps
-    if agent.steps >= 1_000_000: saveModel(agent); break
+    if agent.steps > 1_000_000: saveModel(agent); break
 
+    lastSteps = agent.steps
 
 running = True
 
@@ -273,13 +271,12 @@ class Game():
         """Initializes the game state and shotgun."""
         self.max_shells = 8
         self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num, self.round = 0
-        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:glass 3:smoke 4:inverter 5:cuffs 6:saw (phone is omitted)
+        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw (phone is omitted)
         self.AI_can_play, self.DEALER_can_play = True
         self.AI_hp, self.DEALER_hp = 4
         self.invert_odds, self.is_sawed = False
 
         self.resetShells()
-        print("Game initialized!")
     
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
