@@ -1,5 +1,5 @@
 
-# BuckShotRouletteDQN v0.3.11
+# BuckShotRouletteDQN v0.4.2
 
 #
 inputs: [(lives/4), (blanks/4), (round/3), [for (dogitem/6)+mask in dogitems], [for (dealeritem/6)+mask in dealeritems], (doghp/4), (dealer hp/4), (current shell/8)]
