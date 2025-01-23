@@ -8,14 +8,7 @@ from collections import deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-
-# hyperparameters
 AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.3.13"
-#EPSILON = 0.1                         # exploration rate
-#EPDECAY = 0.99999                 # exploration decay rate
-#EPMIN = 0.02                        # minimum exploration rate
-UPDATE_STEPS = 300                  # update target network every n steps ????????
-
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
@@ -150,7 +143,7 @@ class DuelingDDQN(nn.Module):
                     
                 outputs.append(x)
 
-        value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features)
+        value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features) #posibilidad
         advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
         q_values = value + advantage
         return q_values
@@ -167,8 +160,8 @@ class DQNAgent:
         
 
         self.memory = deque(maxlen=self.memory_size)
-        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True).to(device)
-        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True).to(device)
+        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
+        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.loss_fn = nn.MSELoss().to(device)
         self.updateTargetNetwork()
@@ -189,7 +182,7 @@ class DQNAgent:
 
     def replay(self):
         if len(self.memory) < self.batch_size:
-            return  # Not enough data to sample a batch
+            return
 
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
