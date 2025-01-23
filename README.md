@@ -8,6 +8,8 @@ outputs: [item actions, shoot who = end token]
 (1+1+1+(8+8)+(8+8)+1+1+1), (6+2)
 <div align="center">
   NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,2), (1,3)], use_noisy=True)
-  <img src="https://github.com/user-attachments/assets/85123bba-addd-4ba2-a723-39a3b3ca319c"
+  <img src="https://github.com/user-attachments/assets/fb7969db-83fb-4e6e-bc88-7bb1509b464f"
+
+
 
 </div>
