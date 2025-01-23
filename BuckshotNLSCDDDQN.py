@@ -8,7 +8,7 @@ from collections import deque
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
-AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.4.1"
+AI_VERSION_NAME = "Buck_NLSCDDDQN_v0.4.2"
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
@@ -44,7 +44,6 @@ class NLSCDDDQN(nn.Module):
         """
         Modular implementation of a Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
         ------------- \n
-        Parameters: \n
         Base DDDQN (inputs, outputs, hidden_dims) \n
         Optional NLSC (noisy, fully noisy, noise, skip connections) \n
         Misc (activation) \n
@@ -106,11 +105,10 @@ class DQNAgent:
         self.outputs = outputs
         self.memory_size = 150_000
         self.batch_size = 256
-        self.lr = 0.0006
         self.memory = deque(maxlen=self.memory_size)
         self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
         self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)
         self.loss_fn = nn.MSELoss().to(device)
         self.updateTargetNetwork()
 
@@ -139,7 +137,6 @@ class DQNAgent:
         rewards = torch.FloatTensor(rewards).to(device)
         next_states = torch.FloatTensor(next_states).to(device)
         dones = torch.FloatTensor(dones).to(device)
-
         q_values = self.model(states).gather(1, actions).squeeze()
         with torch.no_grad():
             max_next_q_values = self.target_model(next_states).max(1)[0]
@@ -240,25 +237,23 @@ class Game():
             if len(self.AI_items) < 8:
                 self.AI_items.append(random.randint(1, 6)) 
                 print("AI round: ", self.AI_items)
-
             if len(self.DEALER_items) < 8:
                 self.DEALER_items.append(random.randint(1, 6)) 
                 print("DEALER round: ", self.DEALER_items)
     
+    def removeUnknownShell(self):
+            if random.randint(0, 1) == 1 and self.live_shells > 0:
+                self.live_shells -= 1
+            else: self.blank_shells -= 1
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward"""
         if self.totalShells == 1:
             raise Exception("are wii gunna have a problem?") 
             #WIP
-        def removeUnknownShell():
-            if random.randint(0, 1) == 1 and self.live_shells > 0:
-                self.live_shells -= 1
-            else: self.blank_shells -= 1
-
         if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
-                if self.shell == 0: removeUnknownShell()
+                if self.shell == 0: self.removeUnknownShell()
                 elif self.shell == 1: self.live_shells -= 1
                 else: self.blank_shells -= 1
                 return 0.5
@@ -292,19 +287,18 @@ class Game():
                 self.DEALER_items.remove(3)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
     
-    def inverter(self, player: bool = False):
-        """Player inverts current round, returns reward"""
-        def invert():
+    def invert(self):
             if self.shell == 0.5: self.shell = 1
             elif self.shell == 1: self.shell = 0.5
             else: self.invert_odds = True
-
+    def inverter(self, player: bool = False):
+        """Player inverts current round, returns reward"""
         if player:
             if 4 in self.AI_items:
                 self.AI_items.remove(4)
-                if self.shell == 0.5: self.blank_shells-=1; self.live_shells+=1
-                elif self.shell == 1: self.blank_shells+=1; self.live_shells-=1
-                invert()
+                if self.shell == 0.5: self.blank_shells -= 1; self.live_shells += 1
+                elif self.shell == 1: self.blank_shells += 1; self.live_shells -= 1
+                self.invert()
                 return 0.3
             else: return -1
         else:
@@ -379,7 +373,49 @@ class Game():
         else:
             shell = self.determineShell()
             if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
-    
+    def DEALERSmoke(self):
+        """The DEALER smokes as many times as possible, stopping if he is at max hp"""
+        for _ in range(self.DEALER_items.count(3)):
+            if self.DEALER_hp == 4: break
+            self.smoke()
+
+    def normalCheat(self):
+        """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI"""
+        self.riggedDetermine(live=True)
+        self.magnifier()
+        self.DEALERSmoke()
+        self.cuff()
+        self.DEALERshootAI()
+        
+    def superCheat(self):
+        """The SUPER cheating DEALER Algorithm, it makes the round blank, (uses magnifiying glass if it has one), smokes if it can, then it shoots itself; 
+            it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
+        self.riggedDetermine(live=False)
+        self.magnifier()
+        self.DEALERSmoke()
+        self.DEALERshootDEALER()
+        self.riggedDetermine(live=True)
+        self.magnifier()
+        self.saw()
+        self.cuff()
+        self.DEALERshootAI()
+
+    def guessLive(self):
+        self.inverter()
+        self.DEALERSmoke()
+        self.cuff()
+        self.saw()
+        self.DEALERshootAI()
+        self.drinkBeer()
+    def guessBlank(self):
+        self.drinkBeer()
+        self.inverter()
+        self.DEALERSmoke()
+        self.DEALERshootDEALER()
+    def dontCheat(self):
+        """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
+        if random.random() < 0.5: self.guessLive()
+        else: self.guessBlank()
     def DEALERalgo(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
         shells = self.blank_shells and self.live_shells
@@ -387,56 +423,9 @@ class Game():
         canCheat = (random.random() < 0.3) and shells and not canSuperCheat
         cantCheat = not canCheat and not canSuperCheat
 
-        def DEALERSmoke():
-            """The DEALER smokes as many times as possible, stopping if he is at max hp"""
-            for _ in range(self.DEALER_items.count(3)):
-                if self.DEALER_hp == 4: break
-                self.smoke()
-
-        def normalCheat():
-            """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI"""
-            self.riggedDetermine(live=True)
-            self.magnifier()
-            DEALERSmoke()
-            self.cuff()
-            self.DEALERshootAI()
-        
-        def superCheat():
-            """The SUPER cheating DEALER Algorithm, it makes the round blank, (uses magnifiying glass if it has one), smokes if it can, then it shoots itself; 
-                it makes the round live (uses magnifiying glass if it has one), saws the gun if it can, cuffs the AI if it can, then shoots the AI"""
-            self.riggedDetermine(live=False)
-            self.magnifier()
-            DEALERSmoke()
-            self.DEALERshootDEALER()
-
-            self.riggedDetermine(live=True)
-            self.magnifier()
-            self.saw()
-            self.cuff()
-            self.DEALERshootAI()
-
-        def dontCheat():
-            """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
-            def guessLive():
-                self.drinkBeer()
-                self.inverter()
-                DEALERSmoke()
-                self.cuff()
-                self.saw()
-                self.DEALERshootAI()
-
-            def guessBlank():
-                self.drinkBeer()
-                self.inverter()
-                DEALERSmoke()
-                self.DEALERshootDEALER()
-
-            if random.random() < 0.5: guessLive()
-            else: guessBlank()
-
-        if cantCheat: dontCheat()
-        elif canCheat: normalCheat()
-        else: superCheat()
+        if cantCheat: self.dontCheat()
+        elif canCheat: self.normalCheat()
+        else: self.superCheat()
 
 def playGame(agent, train=True):
     def getState():
@@ -468,5 +457,4 @@ while True:
     else: playGame(agent)
 
     if agent.steps > 1_000_000: saveModel(agent); break
-
     lastSteps = agent.steps
