@@ -1,0 +1,42 @@
+class DuelingDDQN(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,skip_connections: list = [], activation: nn.Module = nn.ReLU()):
+        super(DuelingDDQN, self).__init__()
+        self.hidden_dims = hidden_dims
+        self.activation = activation
+        self.skip_connections = skip_connections
+
+        self.hidden_layers = nn.ModuleList()
+        prev_dim = input_dim
+        for hidden_dim in hidden_dims:
+            self.hidden_layers.append(nn.Linear(prev_dim, hidden_dim, device=device))
+            prev_dim = hidden_dim
+        
+        self.value_fc = nn.Linear(prev_dim, 1, device=device)
+        self.advantage_fc = nn.Linear(prev_dim, output_dim, device=device)
+        
+        self.skip_projections = nn.ModuleList()
+
+        if skip_connections:
+            for (from_layer, to_layer) in self.skip_connections:
+                if from_layer == 0: self.skip_projections.append(nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
+                else: self.skip_projections.append(None)
+
+    def forward(self, x):
+        outputs = [x]
+        for i, layer in enumerate(self.hidden_layers):
+            x = self.activation(layer(x))
+            if self.skip_connections:
+                for (from_layer, to_layer) in self.skip_connections:
+                    if to_layer == i+1:
+                        if from_layer == 0:
+                            projected_input = self.skip_projections[0](outputs[from_layer])
+                            x += projected_input
+                        elif outputs[from_layer].shape[1] == x.shape[1]: x += outputs[from_layer]
+                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
+                    
+                outputs.append(x)
+
+        value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features) #posibilidad
+        advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
+        q_values = value + advantage
+        return q_values
