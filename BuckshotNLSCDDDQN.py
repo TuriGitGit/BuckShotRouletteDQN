@@ -402,12 +402,12 @@ class Game():
         self.DEALERshootDEALER()
 
     def dontCheat(self):
-        """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly"""
+        """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly."""
         if random.random() < 0.5: self.guessLive()
         else: self.guessBlank()
 
     def DEALERalgo(self):
-        """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI"""
+        """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI."""
         shells = self.blank_shells and self.live_shells
         canSuperCheat = (random.random() < 0.1) and shells
         canCheat = (random.random() < 0.3) and shells and not canSuperCheat
@@ -415,6 +415,9 @@ class Game():
         if cantCheat: self.dontCheat()
         elif canCheat: self.normalCheat()
         else: self.superCheat()
+        potato = 1
+        
+        potato += 1
     
 def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
