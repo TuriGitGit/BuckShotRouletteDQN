@@ -412,25 +412,46 @@ class Game():
         canSuperCheat = (random.random() < 0.1) and shells
         canCheat = (random.random() < 0.3) and shells and not canSuperCheat
         cantCheat = not canCheat and not canSuperCheat
-
         if cantCheat: self.dontCheat()
         elif canCheat: self.normalCheat()
         else: self.superCheat()
-
-def playGame(agent, train=True):
+    
+def playGame(agent: DQNAgent, game: Game):
+    game.resetGame()
     def getState():
         flattened_state = np.array(#WIP
             dtype=np.float32)
         print(flattened_state)
         return flattened_state
-
+    
     state = getState()
-    #WIP
-    running = True
-    while running:
-        #WIP
-        pass
-    #WIP
+    done = False
+    while not done:
+        while game.AI_can_play and not done:
+            action = agent.act(state)
+            reward = 0
+            if action == 0: reward = game.AIshootDEALER(game.shell); done = True
+            elif action == 1: reward = game.smoke(player=True)
+            elif action == 2: reward = game.magnifier(player=True)
+            elif action == 3: reward = game.drinkBeer(player=True)
+            elif action == 4: reward = game.inverter(player=True)
+            elif action == 5: reward = game.cuff(player=True)
+            elif action == 6: reward = game.saw(player=True)
+            elif action == 7: reward = game.AIshootAI(game.shell); done = True
+
+            next_state = getState()
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
+
+            agent.replay()
+            if agent.steps % 10 == 0:
+                agent.updateTargetNetwork()
+
+        if game.DEALER_can_play:
+            game.DEALERalgo()
+
+        game.AI_can_play = True
+        game.DEALER_can_play = True
 
 agent = DQNAgent(22, 8); lastSteps, e = 0
 while True:
