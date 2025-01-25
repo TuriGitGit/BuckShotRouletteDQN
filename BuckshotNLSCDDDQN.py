@@ -175,6 +175,9 @@ class Game():
         
     def restockItems(self):
         """Restocks the round for the AI and DEALER."""
+        #remove all 0s from both lists
+        self.AI_items = list(filter(None, self.AI_items))
+        self.DEALER_items = list(filter(None, self.DEALER_items))
         for _ in range(4):
             if len(self.AI_items) <= 8:
                 self.AI_items.append(random.randint(1, 6)) 
@@ -182,6 +185,8 @@ class Game():
             if len(self.DEALER_items) <= 8:
                 self.DEALER_items.append(random.randint(1, 6)) 
                 print("DEALER round: ", self.DEALER_items)
+        while len(self.AI_items) < 8: self.AI_items.append(0)
+        while len(self.DEALER_items) < 8: self.DEALER_items.append(0)
     
     def totalShells(self): 
         return self.live_shells + self.blank_shells
@@ -412,53 +417,50 @@ class Game():
 
     def DEALERalgo(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI."""
-        shells = self.blank_shells and self.live_shells
-        canSuperCheat = (random.random() < 0.1) and shells
-        canCheat = (random.random() < 0.3) and shells and not canSuperCheat
-        cantCheat = not canCheat and not canSuperCheat
-        if cantCheat: self.dontCheat()
-        elif canCheat: self.normalCheat()
-        else: self.superCheat()
+        if self.blank_shells and self.live_shells:
+            if random.random() < 0.1 or self.DEALER_hp == 1: self.superCheat()
+            elif random.random() < 0.4: self.normalCheat()
+            else: self.dontCheat()
+        else: self.dontCheat()
     
 def playGame(agent: DQNAgent, game: Game, train: bool = True):
     game.resetGame()
     done = False
     def getState():
-        print([[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]])
-        flattened_state = np.array(
-            [[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]],
-            dtype=np.float32)
-        print([[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]])
+        flattened_state = np.array([game.AI_hp/4] + [game.DEALER_hp/4] + [game.live_shells/4] + [game.blank_shells/4] + [game.shell] + 
+                                   [game.current_round_num/8] + [item/6 for item in game.AI_items] + [item/6 for item in game.DEALER_items],
+                                   dtype=np.float16)
+        print(flattened_state)
         return flattened_state
     
     state = getState()
     turn_done = False
-    while game.AI_can_play and not turn_done:
-        action = agent.act(state)
-        reward = 0
-        if action == 0: reward = game.AIshootDEALER(game.shell); turn_done = True
-        elif action == 1: reward = game.smoke(player=True)
-        elif action == 2: reward = game.magnifier(player=True)
-        elif action == 3: reward = game.drinkBeer(player=True)
-        elif action == 4: reward = game.inverter(player=True)
-        elif action == 5: reward = game.cuff(player=True)
-        elif action == 6: reward = game.saw(player=True)
-        elif action == 7: reward = game.AIshootAI(game.shell); turn_done = True
-        else: raise Exception(f"Invalid action: {action}")
+    if game.AI_can_play:
+        while not turn_done:
+            action = agent.act(state)
+            reward = 0
+            if action == 0: reward = game.AIshootDEALER(game.shell); turn_done = True
+            elif action == 1: reward = game.smoke(player=True)
+            elif action == 2: reward = game.magnifier(player=True)
+            elif action == 3: reward = game.drinkBeer(player=True)
+            elif action == 4: reward = game.inverter(player=True)
+            elif action == 5: reward = game.cuff(player=True)
+            elif action == 6: reward = game.saw(player=True)
+            elif action == 7: reward = game.AIshootAI(game.shell); turn_done = True
+            else: raise Exception(f"Invalid action: {action}")
 
-        next_state = getState()
-        agent.remember(state, action, reward, next_state, done)
-        state = next_state
+            next_state = getState()
+            agent.remember(state, action, reward, next_state, done)
+            state = next_state
 
-        agent.replay()
-        if agent.steps % 10 == 0:
-            agent.updateTargetNetwork()
+            agent.replay()
+            if agent.steps % 10 == 0:
+                agent.updateTargetNetwork()
+    else: game.AI_can_play = True
 
     if game.DEALER_can_play:
         game.DEALERalgo()
-
-    game.AI_can_play = True
-    game.DEALER_can_play = True
+    else: game.DEALER_can_play = True
 
 agent = DQNAgent(22, 8); lastSteps = e = 0
 while True:
