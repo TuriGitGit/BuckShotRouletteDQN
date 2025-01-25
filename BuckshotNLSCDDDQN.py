@@ -38,14 +38,11 @@ class NLSCDDDQN(nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
                  use_noisy: bool = True, fully_noisy: bool = False, noise_std_init: float = 0.4):
-        """
-        Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
+        """ Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
         ------------- \n
         Base DDDQN (inputs, outputs, hidden_dims) \n
         Optional NLSC (noisy, fully noisy, noise, skip connections) \n
-        Misc (activation) \n
-        ------------- \n
-        """
+        Misc (activation) """
         super(NLSCDDDQN, self).__init__()
         self.hidden_dims = hidden_dims
         self.activation = activation
@@ -70,19 +67,18 @@ class NLSCDDDQN(nn.Module):
                 else: self.skip_projections.append(None)
 
     def forward(self, x):
-        outputs = [x]
         for i, layer in enumerate(self.hidden_layers):
             x = self.activation(layer(x))
             if self.skip_connections:
                 for (from_layer, to_layer) in self.skip_connections:
                     if to_layer == i + 1:
                         if from_layer == 0:
-                            projected_input = self.skip_projections[0](outputs[from_layer])
+                            projected_input = self.skip_projections[0]([x][from_layer])
                             x += projected_input
-                        elif outputs[from_layer].shape[1] == x.shape[1]:
-                            x += outputs[from_layer]
-                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
-                outputs.append(x)
+                        elif [x][from_layer].shape[1] == x.shape[1]:
+                            x += [x][from_layer]
+                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {[x][from_layer].shape} to current layer with shape {x.shape}")
+                [x].append(x)
 
         value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features)
         advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
@@ -90,10 +86,8 @@ class NLSCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v0.4.8"
-        self.steps = 0
-        self.inputs = inputs
-        self.outputs = outputs
+        self.name = "Buck_NLSCDDDQN_v0.4.9"
+        self.inputs, self.outputs = inputs, outputs
         self.memory_size = 150_000
         self.batch_size = 256
         self.memory = deque(maxlen=self.memory_size)
@@ -101,6 +95,7 @@ class DQNAgent:
         self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)
         self.loss_fn = nn.MSELoss().to(device)
+        self.steps = 0
         self.updateTargetNetwork()
 
     def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
@@ -119,11 +114,10 @@ class DQNAgent:
         
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
-        states, next_states = np.array(states), np.array(next_states)
-        states = torch.FloatTensor(states).to(device)
+        states = torch.FloatTensor(np.array(states)).to(device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(device)
         rewards = torch.FloatTensor(rewards).to(device)
-        next_states = torch.FloatTensor(next_states).to(device)
+        next_states = torch.FloatTensor(np.array(next_states)).to(device)
         dones = torch.FloatTensor(dones).to(device)
         q_values = self.model(states).gather(1, actions).squeeze()
         with torch.no_grad():
@@ -192,6 +186,10 @@ class Game():
         if live: self.live_shells -= 1
         else: self.blank_shells -= 1
     
+    def outOfShells(self):
+        self.resetShells()
+        self.restockItems()
+    
     def resetGame(self):
         """Resets the game state, initializes the shotgun, and loads bullets."""
         self.resetShells()
@@ -222,20 +220,18 @@ class Game():
             
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
-        if self.totalShells == 1:
-            raise Exception("are wii gunna have a problem?") 
-            #WIP
+        if self.totalShells == 1: self.outOfShells(); return 0.2
         if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
-                if self.shell == 0: self.removeUnknownShell() #WIP
+                if self.shell == 0: self.removeUnknownShell()
                 elif self.shell == 1: self.live_shells -= 1
                 else: self.blank_shells -= 1
-                return 0.5
+                return 0.2
             else: return -1
         elif 1 in self.DEALER_items: 
             self.DEALER_items.remove(1)
-            #WIP
+            self.removeUnknownShell()
             
     def magnifier(self, player: bool = False):
         """Player breaks glass, determining self.shell, returns reward."""
@@ -250,6 +246,7 @@ class Game():
     def smoke(self, player: bool = False):
         """Player smokes, regains 1 hp, returns reward."""
         if player:
+            
             if 3 in self.AI_items:
                 self.AI_items.remove(3)
                 self.AI_hp = min(4, self.AI_hp+1)
@@ -272,7 +269,7 @@ class Game():
                 if self.shell == 0.5: self.blank_shells -= 1; self.live_shells += 1
                 elif self.shell == 1: self.blank_shells += 1; self.live_shells -= 1
                 self.invert()
-                return 0.3
+                return 0.2
             else: return -1
         elif 4 in self.DEALER_items: self.DEALER_items.remove(4)
     
@@ -307,17 +304,11 @@ class Game():
             if self.shell == 1:
                 self.AI_hp -= 1 if not self.is_sawed else 2
                 return -3 if not self.is_sawed else -6 
-            else: 
-                return 0 if not self.is_sawed else -2
+            else: return 0 if not self.is_sawed else -2
         elif self.shell == 0.5: 
             return 2 if not self.is_sawed else -8
-        elif not self.is_sawed: 
-            self.AI_hp -= 1
-            return -20
-        else: 
-            self.is_sawed = False
-            self.AI_hp -= 2
-            return -40
+        elif not self.is_sawed: self.AI_hp -= 1; return -20
+        else: self.AI_hp -= 2; return -40
         
     def AIshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward."""
@@ -325,13 +316,12 @@ class Game():
             self.shell = self.determineShell()
             if self.shell == 1:
                 if not self.is_sawed: self.DEALER_hp -= 1; return 3
-                else: self.is_sawed = False; self.DEALER_hp -= 2; return 6
+                else: self.DEALER_hp -= 2; return 6
             else: return 0
         elif self.shell == 1:
             if not self.is_sawed: self.DEALER_hp -= 1; return 4
-            else: self.is_sawed = False; self.DEALER_hp -= 2; return 8
-        elif not self.is_sawed: return -20 
-        else: self.is_sawed = False; return -32
+            else: self.DEALER_hp -= 2; return 8
+        else: return -20 if not self.is_sawed else -32
     
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER."""
@@ -398,22 +388,23 @@ class Game():
             else: self.dontCheat()
         else: self.dontCheat()
     
-def playGame(agent: DQNAgent, game: Game, train: bool = True):
+def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
     state = game.getState()
     done = turn_done = False
     if game.AI_can_play:
         while not turn_done:
             action = agent.act(state)
-            if action == 0: reward = game.AIshootDEALER(); turn_done = True
-            elif action == 1: reward = game.smoke(player=True)
-            elif action == 2: reward = game.magnifier(player=True)
-            elif action == 3: reward = game.drinkBeer(player=True)
-            elif action == 4: reward = game.inverter(player=True)
-            elif action == 5: reward = game.cuff(player=True)
-            elif action == 6: reward = game.saw(player=True)
-            elif action == 7: reward = game.AIshootAI(); turn_done = True
-            else: raise Exception(f"Invalid action: {action}")
+            match action:
+                case 0: reward = game.AIshootDEALER(); turn_done = True
+                case 1: reward = game.smoke(player=True)
+                case 2: reward = game.magnifier(player=True)
+                case 3: reward = game.drinkBeer(player=True)
+                case 4: reward = game.inverter(player=True)
+                case 5: reward = game.cuff(player=True)
+                case 6: reward = game.saw(player=True)
+                case 7: reward = game.AIshootAI(); turn_done = True
+                case _: raise Exception(f"Invalid action: {action}")
             
             next_state = game.getState()
             agent.remember(state, action, reward, next_state, done)
@@ -430,10 +421,10 @@ while True:
     e += 1
     if (e) % 10 == 0:
         _steps = agent.steps
-        for ep in range(20): playGame(agent, Game(), train=False)
+        for ep in range(20): playGame(agent, Game())
         print(f"{(agent.steps - lastSteps) // 20}")
         agent.steps = _steps
-    else: playGame(agent, Game(), train=False)
+    else: playGame(agent, Game())
 
     if agent.steps > 1_000_000: saveModel(agent); break
     lastSteps = agent.steps
