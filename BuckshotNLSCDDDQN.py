@@ -67,8 +67,7 @@ class NLSCDDDQN(nn.Module):
                 if from_layer == 0:
                     projection_layer = (NoisyLinear(input_dim, hidden_dims[to_layer - 1]) if fully_noisy else nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
                     self.skip_projections.append(projection_layer)
-                else:
-                    self.skip_projections.append(None)
+                else: self.skip_projections.append(None)
 
     def forward(self, x):
         outputs = [x]
@@ -117,8 +116,7 @@ class DQNAgent:
         self.memory.append(experience)
 
     def replay(self):
-        if len(self.memory) < self.batch_size:
-            return #FIX ?
+        if len(self.memory) < self.batch_size: return #FIX ?
 
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
@@ -140,8 +138,7 @@ class DQNAgent:
 
 def saveModel(self, filename):
     filename = f"{self.name}_{self.steps}.pth"
-    if not os.path.exists("models"):
-        os.makedirs("models")
+    if not os.path.exists("models"): os.makedirs("models")
         
     model_path = os.path.join("models", filename)
     torch.save({
@@ -152,8 +149,7 @@ def saveModel(self, filename):
 
 def loadModel(self, filename):
     filename = f"{self.name}_{self.steps}.pth"
-    if not os.path.exists("models"):
-        os.makedirs("models")
+    if not os.path.exists("models"): os.makedirs("models")
         
     model_path = os.path.join("models", filename)
     if os.path.exists(model_path):
@@ -179,24 +175,20 @@ class Game():
         self.AI_items = list(filter(None, self.AI_items))
         self.DEALER_items = list(filter(None, self.DEALER_items))
         for _ in range(4):
-            if len(self.AI_items) <= 8:
-                self.AI_items.append(random.randint(1, 6)) 
-                print("AI round: ", self.AI_items)
-            if len(self.DEALER_items) <= 8:
-                self.DEALER_items.append(random.randint(1, 6)) 
-                print("DEALER round: ", self.DEALER_items)
-        while len(self.AI_items) < 8: self.AI_items.append(0)
-        while len(self.DEALER_items) < 8: self.DEALER_items.append(0)
+            if len(self.AI_items) <= 8: self.AI_items.append(random.randint(1, 6))
+            if len(self.DEALER_items) <= 8: self.DEALER_items.append(random.randint(1, 6))
+            
+        while len(self.AI_items) <= 8: self.AI_items.append(0)
+        while len(self.DEALER_items) <= 8: self.DEALER_items.append(0)
     
-    def totalShells(self): 
-        return self.live_shells + self.blank_shells
+    def totalShells(self): return self.live_shells + self.blank_shells
     
     def determineShell(self):
-        """Determines the type of shell in the current chamber, returns 1 for live and 0.5 for blank."""
+        """Determines the type of self.shell in the current chamber, returns 1 for live and 0.5 for blank."""
         return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
     
     def riggedDetermine(self, live: bool):
-        """Determines the shell to be the chosen shell."""
+        """Determines the self.shell to be the chosen self.shell."""
         return 1 if live else 0.5
     
     def removeShell(self, live: bool):
@@ -206,14 +198,10 @@ class Game():
     def resetGame(self):
         """Resets the game state, initializes the shotgun, and loads bullets."""
         self.resetShells()
-        self.AI_items = []  # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
-        self.DEALER_items = []
-        self.AI_hp = 4
-        self.DEALER_hp = 4
-        self.AI_can_play = True
-        self.DEALER_can_play = True
-        self.invert_odds = False
-        self.is_sawed = False
+        self.AI_items = [] = self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
+        self.AI_hp = self.DEALER_hp = 4
+        self.AI_can_play = self.DEALER_can_play = True
+        self.invert_odds = self.is_sawed = False
         self.restockItems()
     
     def debugPrintGame(self):
@@ -229,10 +217,8 @@ class Game():
         #WIP
     
     def removeUnknownShell(self):
-        if random.randint(0, 1) == 1 and self.live_shells > 0:
-            self.live_shells -= 1
-        else: 
-            self.blank_shells -= 1
+        if random.randint(0, 1) == 1 and self.live_shells > 0: self.live_shells -= 1
+        else: self.blank_shells -= 1
             
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
@@ -242,26 +228,23 @@ class Game():
         if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
-                if self.shell == 0: self.removeUnknownShell()
+                if self.shell == 0: self.removeUnknownShell() #WIP
                 elif self.shell == 1: self.live_shells -= 1
                 else: self.blank_shells -= 1
                 return 0.5
             else: return -1
-        else:
-            if 1 in self.DEALER_items:
-                self.DEALER_items.remove(1)
+        elif 1 in self.DEALER_items: self.DEALER_items.remove(1)
+            #WIP
             
     def magnifier(self, player: bool = False):
-        """Player breaks glass, determining shell, returns reward."""
+        """Player breaks glass, determining self.shell, returns reward."""
         if player:
             if 2 in self.AI_items:
                 self.AI_items.remove(2)
                 self.shell = self.determineShell()
                 return 1
             else: return -1
-        else:
-            if 2 in self.DEALER_items:
-                self.DEALER_items.remove(2)           
+        elif 2 in self.DEALER_items: self.DEALER_items.remove(2)           
     
     def smoke(self, player: bool = False):
         """Player smokes, regains 1 hp, returns reward."""
@@ -271,8 +254,7 @@ class Game():
                 self.AI_hp = min(4, self.AI_hp+1)
                 return 1
             else: return -1
-        else:
-            if 3 in self.DEALER_items:
+        elif 3 in self.DEALER_items:
                 self.DEALER_items.remove(3)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
     
@@ -280,6 +262,7 @@ class Game():
             if self.shell == 0.5: self.shell = 1
             elif self.shell == 1: self.shell = 0.5
             else: self.invert_odds = True
+            
     def inverter(self, player: bool = False):
         """Player inverts current round, returns reward."""
         if player:
@@ -290,9 +273,7 @@ class Game():
                 self.invert()
                 return 0.3
             else: return -1
-        else:
-            if 4 in self.DEALER_items:
-                self.DEALER_items.remove(4)
+        elif 4 in self.DEALER_items: self.DEALER_items.remove(4)
     
     def cuff(self, player: bool = False):
         """Player cuffs opponent, skipping their turn, returns reward."""
@@ -302,8 +283,7 @@ class Game():
                 self.DEALER_can_play = False
                 return 1
             else: return -1
-        else:
-            if 5 in self.DEALER_items:
+        elif 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
                 self.AI_can_play = False
     
@@ -315,8 +295,7 @@ class Game():
                 self.is_sawed = True
                 return 1 if self.shell != 0.5 else -2
             else: return -1
-        else:
-            if 5 in self.DEALER_items:
+        elif 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
                 self.is_sawed = True
     
@@ -325,50 +304,45 @@ class Game():
         if self.shell == 0:
             self.shell = self.determineShell()
             if self.shell == 1:
-                self.AI_hp -= 1 if self.is_sawed == False else 2
-                return -3 if self.is_sawed == False else -6 
+                self.AI_hp -= 1 if not self.is_sawed else 2
+                return -3 if not self.is_sawed else -6 
             else: 
-                return 0 if self.is_sawed == False else -2
+                return 0 if not self.is_sawed else -2
         elif self.shell == 0.5: 
-            return 2 if self.is_sawed == False else -8
-        else:
-            if self.is_sawed == False: 
-                self.AI_hp -= 1
-                return -20
-            else: 
-                self.is_sawed = False
-                self.AI_hp -= 2
-                return -40
+            return 2 if not self.is_sawed else -8
+        elif not self.is_sawed: 
+            self.AI_hp -= 1
+            return -20
+        else: 
+            self.is_sawed = False
+            self.AI_hp -= 2
+            return -40
         
-    def AIshootDEALER(self, shell):
+    def AIshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward."""
-        if shell == 0:
-            shell = self.determineShell()
-            if shell == 1:
-                if self.is_sawed == False: self.DEALER_hp -= 1; return 3
+        if self.shell == 0:
+            self.shell = self.determineShell()
+            if self.shell == 1:
+                if not self.is_sawed: self.DEALER_hp -= 1; return 3
                 else: self.is_sawed = False; self.DEALER_hp -= 2; return 6
             else: return 0
-        elif shell == 1:
-            if self.is_sawed == False: self.DEALER_hp -= 1; return 4
+        elif self.shell == 1:
+            if not self.is_sawed: self.DEALER_hp -= 1; return 4
             else: self.is_sawed = False; self.DEALER_hp -= 2; return 8
-        else:
-            if self.is_sawed == False: return -20 
-            else: self.is_sawed = False; return -32
+        elif not self.is_sawed: return -20 
+        else: self.is_sawed = False; return -32
     
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER."""
-        if shell == 0.5: self.AI_can_play = False
-        elif shell == 0:
-            shell = self.determineShell()
-            if shell == 1:
-                self.DEALER_hp -= 1
+        if self.shell == 0.5: self.AI_can_play = False
+        elif self.shell == 0: self.shell = self.determineShell()
+        elif self.shell == 1: self.DEALER_hp -= 1
     
     def DEALERshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI."""
-        if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
-        else:
-            shell = self.determineShell()
-            if shell == 1: self.AI_hp -= 1 if self.is_sawed == False else 2
+        if self.shell == 1: self.AI_hp -= 1 if not self.is_sawed else 2
+        elif self.shell == 0 and self.determineShell() == 1: self.AI_hp -= 1 if not self.is_sawed else 2
+        
     def DEALERSmoke(self):
         """The DEALER smokes as many times as possible, stopping if he is at max hp."""
         for _ in range(self.DEALER_items.count(3)):
@@ -430,7 +404,6 @@ def playGame(agent: DQNAgent, game: Game, train: bool = True):
         flattened_state = np.array([game.AI_hp/4] + [game.DEALER_hp/4] + [game.live_shells/4] + [game.blank_shells/4] + [game.shell] + 
                                    [game.current_round_num/8] + [item/6 for item in game.AI_items] + [item/6 for item in game.DEALER_items],
                                    dtype=np.float16)
-        print(flattened_state)
         return flattened_state
     
     state = getState()
@@ -439,27 +412,24 @@ def playGame(agent: DQNAgent, game: Game, train: bool = True):
         while not turn_done:
             action = agent.act(state)
             reward = 0
-            if action == 0: reward = game.AIshootDEALER(game.shell); turn_done = True
+            if action == 0: reward = game.AIshootDEALER(); turn_done = True
             elif action == 1: reward = game.smoke(player=True)
             elif action == 2: reward = game.magnifier(player=True)
             elif action == 3: reward = game.drinkBeer(player=True)
             elif action == 4: reward = game.inverter(player=True)
             elif action == 5: reward = game.cuff(player=True)
             elif action == 6: reward = game.saw(player=True)
-            elif action == 7: reward = game.AIshootAI(game.shell); turn_done = True
+            elif action == 7: reward = game.AIshootAI(); turn_done = True
             else: raise Exception(f"Invalid action: {action}")
-
+            
             next_state = getState()
             agent.remember(state, action, reward, next_state, done)
             state = next_state
-
             agent.replay()
-            if agent.steps % 10 == 0:
-                agent.updateTargetNetwork()
+            if agent.steps % 10 == 0: agent.updateTargetNetwork()
     else: game.AI_can_play = True
 
-    if game.DEALER_can_play:
-        game.DEALERalgo()
+    if game.DEALER_can_play: game.DEALERalgo()
     else: game.DEALER_can_play = True
 
 agent = DQNAgent(22, 8); lastSteps = e = 0
@@ -467,8 +437,7 @@ while True:
     e += 1
     if (e) % 10 == 0:
         _steps = agent.steps
-        for ep in range(20):
-            playGame(agent, Game(), train=False)
+        for ep in range(20): playGame(agent, Game(), train=False)
 
         print(f"{(agent.steps - lastSteps) // 20}")
         agent.steps = _steps
