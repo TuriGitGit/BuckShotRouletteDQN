@@ -21,11 +21,11 @@ class NoisyLinear(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        bound = 1 / self.weight_mu.size(1)**0.5
+        bound = 1 / self.weight_mu.size(1) ** 0.5
         self.weight_mu.data.uniform_(-bound, bound)
-        self.weight_sigma.data.fill_(self.std_init / self.weight_mu.size(1)**0.5)
+        self.weight_sigma.data.fill_(self.std_init / self.weight_mu.size(1) ** 0.5)
         self.bias_mu.data.uniform_(-bound, bound)
-        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(1)**0.5)
+        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(1) ** 0.5)
 
     def forward(self, x):
         self.weight_epsilon.normal_()
@@ -179,15 +179,16 @@ class Game():
     
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
-        self.live_shells, self.blank_shells = random.randint(1, self.max_shells//2), random.randint(1, self.max_shells//2)
+        self.live_shells, self.blank_shells = random.randint(1, self.max_shells // 2), random.randint(1, self.max_shells // 2)
         self.shells = self.totalShells()
         self.current_round_num = 0
     
-    def totalShells(self): return self.live_shells + self.blank_shells
+    def totalShells(self): 
+        return self.live_shells + self.blank_shells
     
     def determineShell(self):
         """Determines the type of shell in the current chamber, returns 1 for live and 0.5 for blank."""
-        return 1 if random.random() <= (self.live_shells/self.shells) else 0.5
+        return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
     
     def riggedDetermine(self, live: bool):
         """Determines the shell to be the chosen shell."""
@@ -220,7 +221,7 @@ class Game():
     
     def restockItems(self):
         """Restocks the round for the AI and DEALER."""
-        for _ in range(self.round*2):
+        for _ in range(self.round * 2):
             if len(self.AI_items) < 8:
                 self.AI_items.append(random.randint(1, 6)) 
                 print("AI round: ", self.AI_items)
@@ -229,9 +230,11 @@ class Game():
                 print("DEALER round: ", self.DEALER_items)
     
     def removeUnknownShell(self):
-            if random.randint(0, 1) == 1 and self.live_shells > 0:
-                self.live_shells -= 1
-            else: self.blank_shells -= 1
+        if random.randint(0, 1) == 1 and self.live_shells > 0:
+            self.live_shells -= 1
+        else: 
+            self.blank_shells -= 1
+            
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
         if self.totalShells == 1:
@@ -325,11 +328,18 @@ class Game():
             if self.shell == 1:
                 self.AI_hp -= 1 if self.is_sawed == False else 2
                 return -3 if self.is_sawed == False else -6 
-            else: return 0 if self.is_sawed == False else -2
-        elif self.shell == 0.5: return 2 if self.is_sawed == False else -8
+            else: 
+                return 0 if self.is_sawed == False else -2
+        elif self.shell == 0.5: 
+            return 2 if self.is_sawed == False else -8
         else:
-            if self.is_sawed == False: self.AI_hp -= 1; return -20
-            else: self.is_sawed = False; self.AI_hp -= 2; return -40
+            if self.is_sawed == False: 
+                self.AI_hp -= 1
+                return -20
+            else: 
+                self.is_sawed = False
+                self.AI_hp -= 2
+                return -40
         
     def AIshootDEALER(self, shell):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward."""
