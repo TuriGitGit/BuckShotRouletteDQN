@@ -86,12 +86,11 @@ class NLSCDDDQN(nn.Module):
 
         value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features)
         advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
-        q_values = value + advantage
-        return q_values
+        return value + advantage
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v0.4.7"
+        self.name = "Buck_NLSCDDDQN_v0.4.8"
         self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
@@ -116,8 +115,8 @@ class DQNAgent:
         self.memory.append(experience)
 
     def replay(self):
-        if len(self.memory) < self.batch_size: return #FIX ?
-
+        if len(self.memory) < self.batch_size: return
+        
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         states, next_states = np.array(states), np.array(next_states)
@@ -139,7 +138,6 @@ class DQNAgent:
 def saveModel(self, filename):
     filename = f"{self.name}_{self.steps}.pth"
     if not os.path.exists("models"): os.makedirs("models")
-        
     model_path = os.path.join("models", filename)
     torch.save({
         'model_state_dict': agent.model.state_dict(),
@@ -150,7 +148,6 @@ def saveModel(self, filename):
 def loadModel(self, filename):
     filename = f"{self.name}_{self.steps}.pth"
     if not os.path.exists("models"): os.makedirs("models")
-        
     model_path = os.path.join("models", filename)
     if os.path.exists(model_path):
         checkpoint = torch.load(model_path)
@@ -203,12 +200,15 @@ class Game():
         self.AI_can_play = self.DEALER_can_play = True
         self.invert_odds = self.is_sawed = False
         self.restockItems()
+        
+    def getState(self): return np.array([self.AI_hp/4] + [self.DEALER_hp/4] + [self.live_shells/4] + [self.blank_shells/4] + [self.shell] + 
+                                        [self.current_round_num/8] + [item/6 for item in self.AI_items] + [item/6 for item in self.DEALER_items],
+                                        dtype=np.float16)
     
     def debugPrintGame(self):
         """Prints the current game state for debugging and visualization."""
         print(f"AI HP: {self.AI_hp}, DEALER HP: {self.DEALER_hp}")
         print(f"Live Shells: {self.live_shells}, Blank Shells: {self.blank_shells}")
-        print(f"Shells in Shotgun: {self.shells}")
         print(f"AI Items: {self.AI_items}")
         print(f"DEALER Items: {self.DEALER_items}")
         print(f"Current Round Number: {self.current_round_num}")
@@ -233,7 +233,8 @@ class Game():
                 else: self.blank_shells -= 1
                 return 0.5
             else: return -1
-        elif 1 in self.DEALER_items: self.DEALER_items.remove(1)
+        elif 1 in self.DEALER_items: 
+            self.DEALER_items.remove(1)
             #WIP
             
     def magnifier(self, player: bool = False):
@@ -399,19 +400,11 @@ class Game():
     
 def playGame(agent: DQNAgent, game: Game, train: bool = True):
     game.resetGame()
-    done = False
-    def getState():
-        flattened_state = np.array([game.AI_hp/4] + [game.DEALER_hp/4] + [game.live_shells/4] + [game.blank_shells/4] + [game.shell] + 
-                                   [game.current_round_num/8] + [item/6 for item in game.AI_items] + [item/6 for item in game.DEALER_items],
-                                   dtype=np.float16)
-        return flattened_state
-    
-    state = getState()
-    turn_done = False
+    state = game.getState()
+    done = turn_done = False
     if game.AI_can_play:
         while not turn_done:
             action = agent.act(state)
-            reward = 0
             if action == 0: reward = game.AIshootDEALER(); turn_done = True
             elif action == 1: reward = game.smoke(player=True)
             elif action == 2: reward = game.magnifier(player=True)
@@ -422,23 +415,22 @@ def playGame(agent: DQNAgent, game: Game, train: bool = True):
             elif action == 7: reward = game.AIshootAI(); turn_done = True
             else: raise Exception(f"Invalid action: {action}")
             
-            next_state = getState()
+            next_state = game.getState()
             agent.remember(state, action, reward, next_state, done)
             state = next_state
             agent.replay()
             if agent.steps % 10 == 0: agent.updateTargetNetwork()
     else: game.AI_can_play = True
-
+    
     if game.DEALER_can_play: game.DEALERalgo()
     else: game.DEALER_can_play = True
 
-agent = DQNAgent(22, 8); lastSteps = e = 0
+agent = DQNAgent(24, 8); lastSteps = e = 0
 while True:
     e += 1
     if (e) % 10 == 0:
         _steps = agent.steps
         for ep in range(20): playGame(agent, Game(), train=False)
-
         print(f"{(agent.steps - lastSteps) // 20}")
         agent.steps = _steps
     else: playGame(agent, Game(), train=False)
