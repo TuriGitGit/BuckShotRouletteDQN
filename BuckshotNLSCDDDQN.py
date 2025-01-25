@@ -25,7 +25,7 @@ class NoisyLinear(nn.Module):
         self.weight_mu.data.uniform_(-bound, bound)
         self.weight_sigma.data.fill_(self.std_init / self.weight_mu.size(1) ** 0.5)
         self.bias_mu.data.uniform_(-bound, bound)
-        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(1) ** 0.5)
+        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(0) ** 0.5)
 
     def forward(self, x):
         self.weight_epsilon.normal_()
@@ -167,21 +167,21 @@ def loadModel(self, filename):
 
 running = True
 class Game():
-    def __init__(self):
-        """Initializes the game state and shotgun."""
-        self.max_shells = 8
-        self.live_shells, self.blank_shells, self.shells, self.shell, self.current_round_num, self.round = 0
-        self.AI_items, self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
-        self.AI_can_play, self.DEALER_can_play = True
-        self.AI_hp, self.DEALER_hp = 4
-        self.invert_odds, self.is_sawed = False
-        self.resetShells()
-    
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
-        self.live_shells, self.blank_shells = random.randint(1, self.max_shells // 2), random.randint(1, self.max_shells // 2)
+        self.live_shells, self.blank_shells = random.randint(1, 4), random.randint(1, 4)
         self.shells = self.totalShells()
-        self.current_round_num = 0
+        self.current_round_num = self.shell = 0
+        
+    def restockItems(self):
+        """Restocks the round for the AI and DEALER."""
+        for _ in range(4):
+            if len(self.AI_items) <= 8:
+                self.AI_items.append(random.randint(1, 6)) 
+                print("AI round: ", self.AI_items)
+            if len(self.DEALER_items) <= 8:
+                self.DEALER_items.append(random.randint(1, 6)) 
+                print("DEALER round: ", self.DEALER_items)
     
     def totalShells(self): 
         return self.live_shells + self.blank_shells
@@ -201,14 +201,18 @@ class Game():
     def resetGame(self):
         """Resets the game state, initializes the shotgun, and loads bullets."""
         self.resetShells()
-        self.AI_items = []
+        self.AI_items = []  # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
         self.DEALER_items = []
         self.AI_hp = 4
         self.DEALER_hp = 4
+        self.AI_can_play = True
+        self.DEALER_can_play = True
+        self.invert_odds = False
+        self.is_sawed = False
+        self.restockItems()
     
     def debugPrintGame(self):
         """Prints the current game state for debugging and visualization."""
-        print(f"Current Round: {self.round}")
         print(f"AI HP: {self.AI_hp}, DEALER HP: {self.DEALER_hp}")
         print(f"Live Shells: {self.live_shells}, Blank Shells: {self.blank_shells}")
         print(f"Shells in Shotgun: {self.shells}")
@@ -218,16 +222,6 @@ class Game():
         print(f"Is sawed?: {self.is_sawed}")
         print(f"Invert Odds?: {self.invert_odds}")
         #WIP
-    
-    def restockItems(self):
-        """Restocks the round for the AI and DEALER."""
-        for _ in range(self.round * 2):
-            if len(self.AI_items) < 8:
-                self.AI_items.append(random.randint(1, 6)) 
-                print("AI round: ", self.AI_items)
-            if len(self.DEALER_items) < 8:
-                self.DEALER_items.append(random.randint(1, 6)) 
-                print("DEALER round: ", self.DEALER_items)
     
     def removeUnknownShell(self):
         if random.randint(0, 1) == 1 and self.live_shells > 0:
@@ -425,58 +419,58 @@ class Game():
         if cantCheat: self.dontCheat()
         elif canCheat: self.normalCheat()
         else: self.superCheat()
-        potato = 1
-        
-        potato += 1
     
-def playGame(agent: DQNAgent, game: Game):
+def playGame(agent: DQNAgent, game: Game, train: bool = True):
     game.resetGame()
+    done = False
     def getState():
-        flattened_state = np.array(#WIP
+        print([[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]])
+        flattened_state = np.array(
+            [[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]],
             dtype=np.float32)
-        print(flattened_state)
+        print([[game.AI_hp, game.DEALER_hp, game.live_shells, game.blank_shells, game.shell, game.current_round_num], [item for item in game.AI_items], [item for item in game.DEALER_items]])
         return flattened_state
     
     state = getState()
-    done = False
-    while not done:
-        while game.AI_can_play and not done:
-            action = agent.act(state)
-            reward = 0
-            if action == 0: reward = game.AIshootDEALER(game.shell); done = True
-            elif action == 1: reward = game.smoke(player=True)
-            elif action == 2: reward = game.magnifier(player=True)
-            elif action == 3: reward = game.drinkBeer(player=True)
-            elif action == 4: reward = game.inverter(player=True)
-            elif action == 5: reward = game.cuff(player=True)
-            elif action == 6: reward = game.saw(player=True)
-            elif action == 7: reward = game.AIshootAI(game.shell); done = True
+    turn_done = False
+    while game.AI_can_play and not turn_done:
+        action = agent.act(state)
+        reward = 0
+        if action == 0: reward = game.AIshootDEALER(game.shell); turn_done = True
+        elif action == 1: reward = game.smoke(player=True)
+        elif action == 2: reward = game.magnifier(player=True)
+        elif action == 3: reward = game.drinkBeer(player=True)
+        elif action == 4: reward = game.inverter(player=True)
+        elif action == 5: reward = game.cuff(player=True)
+        elif action == 6: reward = game.saw(player=True)
+        elif action == 7: reward = game.AIshootAI(game.shell); turn_done = True
+        else: raise Exception(f"Invalid action: {action}")
 
-            next_state = getState()
-            agent.remember(state, action, reward, next_state, done)
-            state = next_state
+        next_state = getState()
+        agent.remember(state, action, reward, next_state, done)
+        state = next_state
 
-            agent.replay()
-            if agent.steps % 10 == 0:
-                agent.updateTargetNetwork()
+        agent.replay()
+        if agent.steps % 10 == 0:
+            agent.updateTargetNetwork()
 
-        if game.DEALER_can_play:
-            game.DEALERalgo()
+    if game.DEALER_can_play:
+        game.DEALERalgo()
 
-        game.AI_can_play = True
-        game.DEALER_can_play = True
+    game.AI_can_play = True
+    game.DEALER_can_play = True
 
-agent = DQNAgent(22, 8); lastSteps, e = 0
+agent = DQNAgent(22, 8); lastSteps = e = 0
 while True:
     e += 1
     if (e) % 10 == 0:
         _steps = agent.steps
         for ep in range(20):
-            playGame(agent, train=False)
+            playGame(agent, Game(), train=False)
 
         print(f"{(agent.steps - lastSteps) // 20}")
         agent.steps = _steps
-    else: playGame(agent)
+    else: playGame(agent, Game(), train=False)
 
     if agent.steps > 1_000_000: saveModel(agent); break
     lastSteps = agent.steps
