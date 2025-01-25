@@ -91,7 +91,7 @@ class NLSCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v0.4.5"
+        self.name = "Buck_NLSCDDDQN_v0.4.7"
         self.steps = 0
         self.inputs = inputs
         self.outputs = outputs
