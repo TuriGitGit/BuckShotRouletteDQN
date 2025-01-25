@@ -1,5 +1,5 @@
 
-# BuckShotRouletteDQN v0.4.2
+# BuckShotRouletteDQN v0.4.7
 
 #
 inputs: [(lives/4), (blanks/4), (shell), [item/6 for item in AI_items], [item/6 for item in DEALER_items], (AI hp/4), (dealer hp/4), (current shell/8)]
