@@ -351,14 +351,13 @@ class NLSCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v1a.1.1"
+        self.name = "Buck_NLSCDDDQN_v1a.2.1"
         self.inputs, self.outputs = inputs, outputs
-        self.memory_size = 150_000
-        self.batch_size = 12000000
-        self.memory = deque(maxlen=self.memory_size)
+        self.batch_size = 3200000
+        self.memory = deque(maxlen=100_000)
         self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
         self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.loss_fn = nn.MSELoss().to(device)
         self.steps = 0
         self.updateTargetNetwork()
@@ -366,7 +365,6 @@ class DQNAgent:
     def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
 
     def act(self, state):
-        # Ensure state is the correct shape
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
         state = torch.FloatTensor(state).to(device)
@@ -453,7 +451,7 @@ agent = DQNAgent(24, 8); lastSteps = e = 0
 start_time = time.time()
 while True:
     e += 1
-    if e > 10: print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
+    if e % 2 == 0: print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
     if (e) % 100 == 0:
         for ep in range(4): playGame(agent, Game())
         print(f"{(agent.steps - lastSteps) // 4}")
