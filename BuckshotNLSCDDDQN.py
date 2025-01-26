@@ -9,9 +9,10 @@ import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
 
+
 class Game():
-    def __init__(self):
-        self.resetGame()
+    
+    def __init__(self): self.resetGame()
     
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
@@ -24,21 +25,30 @@ class Game():
         self.AI_items = list(filter(None, self.AI_items))
         self.DEALER_items = list(filter(None, self.DEALER_items))
         for _ in range(4):
-            if len(self.AI_items) < 8: self.AI_items.append(random.randint(1, 6))
-            if len(self.DEALER_items) < 8: self.DEALER_items.append(random.randint(1, 6))
+            if len(self.AI_items) < 8:
+                self.AI_items.append(random.randint(1, 6))
+            if len(self.DEALER_items) < 8:
+                self.DEALER_items.append(random.randint(1, 6))
             
-        while len(self.AI_items) < 8: self.AI_items.append(0)
-        while len(self.DEALER_items) < 8: self.DEALER_items.append(0)
+        while len(self.AI_items) < 8:
+            self.AI_items.append(0)
+        while len(self.DEALER_items) < 8:
+            self.DEALER_items.append(0)
     
-    def totalShells(self): return self.live_shells + self.blank_shells
+    def totalShells(self): 
+        return self.live_shells + self.blank_shells
     
-    def determineShell(self): return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
+    def determineShell(self): 
+        return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
     
-    def riggedDetermine(self, live: bool): return 1 if live else 0.5
+    def riggedDetermine(self, live: bool): 
+        return 1 if live else 0.5
     
     def removeShell(self, live: bool):
-        if live: self.live_shells -= 1
-        else: self.blank_shells -= 1
+        if live:
+            self.live_shells -= 1
+        else:
+            self.blank_shells -= 1
     
     def outOfShells(self):
         self.resetShells()
@@ -66,21 +76,31 @@ class Game():
         #WIP
     
     def removeUnknownShell(self):
-        if random.randint(0, 1) == 1 and self.live_shells > 0: self.live_shells -= 1
-        else: self.blank_shells -= 1
+        if random.randint(0, 1) == 1 and self.live_shells > 0:
+            self.live_shells -= 1
+        else:
+            self.blank_shells -= 1
             
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
-        if self.totalShells == 1: self.outOfShells(); return 0.2
+        if self.totalShells == 1:
+            self.outOfShells(); return 0.2
+        
         if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
                 self.AI_items.append(0)
-                if self.shell == 0: self.removeUnknownShell()
-                elif self.shell == 1: self.live_shells -= 1
-                else: self.blank_shells -= 1
+                if self.shell == 0:
+                    self.removeUnknownShell()
+                elif self.shell == 1:
+                    self.live_shells -= 1
+                else:
+                    self.blank_shells -= 1
                 return 0.2
-            else: return -1
+            
+            else:
+                return -1
+            
         elif 1 in self.DEALER_items: 
             self.DEALER_items.remove(1)
             self.DEALER_items.append(0)
@@ -94,7 +114,10 @@ class Game():
                 self.AI_items.append(0)
                 self.shell = self.determineShell()
                 return 1
-            else: return -1
+            
+            else:
+                return -1
+            
         elif 2 in self.DEALER_items: 
             self.DEALER_items.remove(2)
             self.DEALER_items.append(0)
@@ -102,22 +125,26 @@ class Game():
     def smoke(self, player: bool = False):
         """Player smokes, regains 1 hp, returns reward."""
         if player:
-            
             if 3 in self.AI_items:
                 self.AI_items.remove(3)
                 self.AI_items.append(0)
                 self.AI_hp = min(4, self.AI_hp+1)
                 return 1
-            else: return -1
+            else: 
+                return -1
+            
         elif 3 in self.DEALER_items:
                 self.DEALER_items.remove(3)
                 self.DEALER_items.append(0)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
     
     def invert(self):
-            if self.shell == 0.5: self.shell = 1
-            elif self.shell == 1: self.shell = 0.5
-            else: self.invert_odds = True
+            if self.shell == 0.5: 
+                self.shell = 1
+            elif self.shell == 1: 
+                self.shell = 0.5
+            else: 
+                self.invert_odds = True
             
     def inverter(self, player: bool = False):
         """Player inverts current round, returns reward."""
@@ -129,7 +156,9 @@ class Game():
                 elif self.shell == 1: self.blank_shells += 1; self.live_shells -= 1
                 self.invert()
                 return 0.2
-            else: return -1
+            else: 
+                return -1
+            
         elif 4 in self.DEALER_items: 
             self.DEALER_items.remove(4)
             self.DEALER_items.append(0)
@@ -142,7 +171,9 @@ class Game():
                 self.AI_items.append(0)
                 self.DEALER_can_play = False
                 return 1
-            else: return -1
+            else: 
+                return -1
+            
         elif 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
                 self.DEALER_items.append(0)
@@ -156,7 +187,9 @@ class Game():
                 self.AI_items.append(0)
                 self.is_sawed = True
                 return 1 if self.shell != 0.5 else -2
-            else: return -1
+            else: 
+                return -1
+            
         elif 6 in self.DEALER_items:
                 self.DEALER_items.remove(6)
                 self.DEALER_items.append(0)
@@ -168,12 +201,18 @@ class Game():
             self.shell = self.determineShell()
             if self.shell == 1:
                 self.AI_hp -= 1 if not self.is_sawed else 2
-                return -3 if not self.is_sawed else -6 
-            else: return 0 if not self.is_sawed else -2
+                return -3 if not self.is_sawed else -6   
+            else: 
+                return 0 if not self.is_sawed else -2
+            
         elif self.shell == 0.5: 
             return 2 if not self.is_sawed else -8
-        elif not self.is_sawed: self.AI_hp -= 1; return -20
-        else: self.AI_hp -= 2; return -40
+        elif not self.is_sawed: 
+            self.AI_hp -= 1
+            return -20
+        else:
+            self.AI_hp -= 2
+            return -40
         
     def AIshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER, returns reward."""
@@ -181,33 +220,51 @@ class Game():
             self.shell = self.determineShell()
             if self.shell == 1:
                 self.live_shells -= 1
-                if not self.is_sawed: self.DEALER_hp -= 1; return 3
-                else: self.DEALER_hp -= 2; return 6
+                if not self.is_sawed: 
+                    self.DEALER_hp -= 1
+                    return 3
+                else: 
+                    self.DEALER_hp -= 2
+                    return 6
+                
             else: 
                 self.blank_shells -= 1
                 return 0
+            
         elif self.shell == 1:
             self.live_shells -= 1
-            if not self.is_sawed: self.DEALER_hp -= 1; return 4
-            else: self.DEALER_hp -= 2; return 8
-        else: return -20 if not self.is_sawed else -32
+            if not self.is_sawed: 
+                self.DEALER_hp -= 1
+                return 4
+            else:
+                self.DEALER_hp -= 2
+                return 8
+        else:
+            return -20 if not self.is_sawed else -32
     
     def DEALERshootDEALER(self):
         """Determines the outcome of the shot if not already known, and shoots DEALER."""
-        if self.shell == 0.5: self.AI_can_play = False
-        elif self.shell == 0: self.shell = self.determineShell()
-        elif self.shell == 1: self.DEALER_hp -= 1
+        if self.shell == 0.5: 
+            self.AI_can_play = False
+        elif self.shell == 0: 
+            self.shell = self.determineShell()
+        elif self.shell == 1: 
+            self.DEALER_hp -= 1
     
     def DEALERshootAI(self):
         """Determines the outcome of the shot if not already known, and shoots AI."""
-        if self.shell == 1: self.AI_hp -= 1 if not self.is_sawed else 2
-        elif self.shell == 0 and self.determineShell() == 1: self.AI_hp -= 1 if not self.is_sawed else 2
+        if self.shell == 1:
+            self.AI_hp -= 1 if not self.is_sawed else 2
+        elif self.shell == 0 and self.determineShell() == 1:
+            self.AI_hp -= 1 if not self.is_sawed else 2
         
     def DEALERSmoke(self):
         """The DEALER smokes as many times as possible, stopping if he is at max hp."""
         for _ in range(self.DEALER_items.count(3)):
-            if self.DEALER_hp == 4: break
-            self.smoke()
+            if self.DEALER_hp == 4:
+                break
+            
+        self.smoke()
 
     def normalCheat(self):
         """The cheating DEALER Algorithm, it makes the round live, (uses magnifiying glass if it has one), smokes if it can, cuffs AI if it can, then it shoots the AI."""
@@ -224,6 +281,7 @@ class Game():
         self.magnifier()
         self.DEALERSmoke()
         self.DEALERshootDEALER()
+        
         self.riggedDetermine(live=True)
         self.magnifier()
         self.saw()
@@ -246,16 +304,23 @@ class Game():
 
     def dontCheat(self):
         """The simple algorithm for the DEALER, it randomly guesses if it is live or blank and then plays accordingly."""
-        if random.random() < 0.5: self.guessLive()
-        else: self.guessBlank()
+        if random.random() < 0.5:
+            self.guessLive()
+        else:
+            self.guessBlank()
 
     def DEALERalgo(self):
         """The DEALER Algorithm used in place of a real dealer, it has to cheat, but it efficiently trains the AI."""
         if self.blank_shells and self.live_shells:
-            if random.random() < 0.1 or self.DEALER_hp == 1: self.superCheat()
-            elif random.random() < 0.4: self.normalCheat()
-            else: self.dontCheat()
-        else: self.dontCheat()
+            if random.random() < 0.1 or self.DEALER_hp == 1:
+                self.superCheat()
+            elif random.random() < 0.4:
+                self.normalCheat()
+            else:
+                self.dontCheat()
+                
+        else:
+            self.dontCheat()
         
     def getState(self):
         return np.array([
@@ -268,8 +333,10 @@ class Game():
             *[item/6 for item in self.AI_items], 
             *[item/6 for item in self.DEALER_items]
         ], dtype=np.float16)
+
         
 class NoisyLinear(nn.Module):
+    
     def __init__(self, in_features, out_features, *,std_init=0.4):
         super(NoisyLinear, self).__init__()
         self.in_features, self.out_features = in_features, out_features
@@ -295,8 +362,10 @@ class NoisyLinear(nn.Module):
         weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
         bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
         return torch.nn.functional.linear(x, weight, bias)
-    
+
+
 class NLSCDDDQN(nn.Module):
+    
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
                  use_noisy: bool = True, fully_noisy: bool = False, noise_std_init: float = 0.4):
@@ -335,9 +404,12 @@ class NLSCDDDQN(nn.Module):
             if self.skip_connections:
                 for (from_layer, to_layer) in self.skip_connections:
                     if to_layer == i + 1:
-                        if from_layer == 0: x = x + self.skip_projections[0](outputs[from_layer])
-                        elif outputs[from_layer].shape[1] == x.shape[1]: x = x + outputs[from_layer]
-                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
+                        if from_layer == 0: 
+                            x = x + self.skip_projections[0](outputs[from_layer])
+                        elif outputs[from_layer].shape[1] == x.shape[1]:
+                            x = x + outputs[from_layer]
+                        else:
+                            raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
                         
             outputs.append(x)
 
@@ -346,7 +418,9 @@ class NLSCDDDQN(nn.Module):
         advantage_mean = advantage.mean(dim=1, keepdim=True)
         return value + (advantage - advantage_mean)
 
+
 class DQNAgent:
+    
     def __init__(self, inputs, outputs):
         self.name = "Buck_NLSCDDDQN_v1a.3.1"
         self.inputs, self.outputs = inputs, outputs
@@ -359,13 +433,15 @@ class DQNAgent:
         self.steps = 0
         self.updateTargetNetwork()
 
-    def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
+    def updateTargetNetwork(self):
+        self.target_model.load_state_dict(self.model.state_dict())
 
     def act(self, state):
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
         state = torch.FloatTensor(state).to(device)
-        with torch.no_grad(): q_values = self.model(state)
+        with torch.no_grad():
+            q_values = self.model(state)
         return torch.argmax(q_values).item()
 
     def remember(self, state, action, reward, next_state, done):
@@ -374,7 +450,8 @@ class DQNAgent:
 
     def replay(self):
         self.steps += 1
-        if len(self.memory) < self.batch_size: return
+        if len(self.memory) < self.batch_size:
+            return
         
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
@@ -395,7 +472,9 @@ class DQNAgent:
 
     def saveModel(self):
         filename = f"{self.name}_{self.steps}.pth"
-        if not os.path.exists("models"): os.makedirs("models")
+        if not os.path.exists("models"):
+            os.makedirs("models")
+            
         model_path = os.path.join("models", filename)
         torch.save({
             'model_state_dict': self.model.state_dict(),
@@ -405,7 +484,9 @@ class DQNAgent:
 
     def loadModel(self):
         filename = f"{self.name}_{self.steps}.pth"
-        if not os.path.exists("models"): os.makedirs("models")
+        if not os.path.exists("models"):
+            os.makedirs("models")
+            
         model_path = os.path.join("models", filename)
         if os.path.exists(model_path):
             checkpoint = torch.load(model_path)
@@ -413,7 +494,8 @@ class DQNAgent:
             self.target_model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.steps = checkpoint['steps']
-        else: raise Exception(f"Model not found in {model_path}")
+        else:
+            raise Exception(f"Model not found in {model_path}")
     
 def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
@@ -423,25 +505,38 @@ def playGame(agent: DQNAgent, game: Game):
         while not turn_done:
             action = agent.act(state)
             match action:
-                case 0: reward = game.AIshootDEALER(); turn_done = True
-                case 1: reward = game.smoke(player=True)
-                case 2: reward = game.magnifier(player=True)
-                case 3: reward = game.drinkBeer(player=True)
-                case 4: reward = game.inverter(player=True)
-                case 5: reward = game.cuff(player=True)
-                case 6: reward = game.saw(player=True)
-                case 7: reward = game.AIshootAI(); turn_done = True
-                case _: raise Exception(f"Invalid action: {action}")
+                case 0:
+                    reward = game.AIshootDEALER(); turn_done = True
+                case 1:
+                    reward = game.smoke(player=True)
+                case 2:
+                    reward = game.magnifier(player=True)
+                case 3:
+                    reward = game.drinkBeer(player=True)
+                case 4:
+                    reward = game.inverter(player=True)
+                case 5:
+                    reward = game.cuff(player=True)
+                case 6:
+                    reward = game.saw(player=True)
+                case 7:
+                    reward = game.AIshootAI(); turn_done = True
+                case _:
+                    raise Exception(f"Invalid action: {action}")
             
             next_state = game.getState()
             agent.remember(state, action, reward, next_state, done)
             state = next_state
             agent.replay()
-            if agent.steps % 300 == 0: agent.updateTargetNetwork()
-    else: game.AI_can_play = True
+            if agent.steps % 300 == 0:
+                agent.updateTargetNetwork()
+    else:
+        game.AI_can_play = True
     
-    if game.DEALER_can_play: game.DEALERalgo()
-    else: game.DEALER_can_play = True
+    if game.DEALER_can_play:
+        game.DEALERalgo()
+    else:
+        game.DEALER_can_play = True
 
 def testPerf():
     """Test raw environment performance without DQN overhead."""
@@ -452,11 +547,13 @@ def testPerf():
     for i in range(iterations):
         if game.AI_can_play:
             game.smoke(player=True)
+        else:
+            game.AI_can_play = True
             
         if game.DEALER_can_play:
-            #game.DEALERalgo()
-            pass
-        else: game.DEALER_can_play = True
+            game.DEALERalgo()
+        else:
+            game.DEALER_can_play = True
             
         if i % 100000 == 0:
             current_time = time.time() - start_time
@@ -484,8 +581,10 @@ def testPerfNAI():
             state = next_state
         else: game.AI_can_play = True
         
-        if game.DEALER_can_play: game.DEALERalgo()
-        else: game.DEALER_can_play = True
+        if game.DEALER_can_play:
+            game.DEALERalgo()
+        else:
+            game.DEALER_can_play = True
         
         if i % 100000 == 0:
             current_time = time.time() - start_time
@@ -502,6 +601,7 @@ def testPerfNAI():
 def testPerfAI(agent: DQNAgent, game: Game):
     iterations = 10_000_000
     start_time = time.time()
+    i_time = 0
     for i in range(iterations):
         game.resetGame()
         state = game.getState()
@@ -510,37 +610,54 @@ def testPerfAI(agent: DQNAgent, game: Game):
             while not turn_done:
                 action = agent.act(state)
                 match action:
-                    case 0: reward = game.AIshootDEALER(); turn_done = True
-                    case 1: reward = game.smoke(player=True)
-                    case 2: reward = game.magnifier(player=True)
-                    case 3: reward = game.drinkBeer(player=True)
-                    case 4: reward = game.inverter(player=True)
-                    case 5: reward = game.cuff(player=True)
-                    case 6: reward = game.saw(player=True)
-                    case 7: reward = game.AIshootAI(); turn_done = True
-                    case _: raise Exception(f"Invalid action: {action}")
+                    case 0:
+                        reward = game.AIshootDEALER(); turn_done = True
+                    case 1:
+                        reward = game.smoke(player=True)
+                    case 2:
+                        reward = game.magnifier(player=True)
+                    case 3:
+                        reward = game.drinkBeer(player=True)
+                    case 4:
+                        reward = game.inverter(player=True)
+                    case 5:
+                        reward = game.cuff(player=True)
+                    case 6:
+                        reward = game.saw(player=True)
+                    case 7:
+                        reward = game.AIshootAI(); turn_done = True
+                    case _:
+                        raise Exception(f"Invalid action: {action}")
                 
                 next_state = game.getState()
                 agent.remember(state, action, reward, next_state, done)
                 state = next_state
                 agent.replay()
-                if agent.steps % 300 == 0: agent.updateTargetNetwork()
-        else: game.AI_can_play = True
+                if agent.steps % 300 == 0:
+                    agent.updateTargetNetwork()
+                
+        else:
+            game.AI_can_play = True
         
-        if game.DEALER_can_play: game.DEALERalgo()
-        else: game.DEALER_can_play = True
+        if game.DEALER_can_play:
+            game.DEALERalgo()
+        else:
+            game.DEALER_can_play = True
         
-        if i % 10 == 0:
+        if i % 20 == 0:
             current_time = time.time() - start_time
             steps_per_second = i / current_time if current_time > 0 else 0
-            print(f"Steps per second: {steps_per_second:.2f}")
+            i_SPS = i / (time.time() - i_time) if i_time != 0 else 0
+            print(f"Steps per second: {steps_per_second:.1f}")
+            print(f"i Steps per second: {i_SPS:.1f}")
+            i_time = time.time()
     
     total_time = time.time() - start_time
     final_sps = iterations / total_time
     print(f"\nFinal Performance:")
     print(f"Total steps: {iterations}")
     print(f"Total time: {total_time:.2f} seconds")
-    print(f"Average steps per second: {final_sps:.2f}")
+    print(f"Average steps per second: {final_sps:.1f}")
     
 testPerfAI(DQNAgent(24, 8), Game())
 
