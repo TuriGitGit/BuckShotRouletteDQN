@@ -11,12 +11,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"U
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, *,std_init=0.4):
         super(NoisyLinear, self).__init__()
-        self.weight_mu = nn.Parameter(torch.empty(out_features, in_features, device=device))
-        self.weight_sigma = nn.Parameter(torch.empty(out_features, in_features, device=device))
-        self.bias_mu = nn.Parameter(torch.empty(out_features, device=device))
-        self.bias_sigma = nn.Parameter(torch.empty(out_features, device=device))
-        self.register_buffer("weight_epsilon", torch.empty(out_features, in_features, device=device))
-        self.register_buffer("bias_epsilon", torch.empty(out_features, device=device))
+        self.in_features, self.out_features = in_features, out_features
+        self.weight_mu = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
+        self.weight_sigma = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
+        self.bias_mu = nn.Parameter(torch.empty(self.out_features, device=device))
+        self.bias_sigma = nn.Parameter(torch.empty(self.out_features, device=device))
+        self.register_buffer("weight_epsilon", torch.empty(self.out_features, self.in_features, device=device))
+        self.register_buffer("bias_epsilon", torch.empty(self.out_features, device=device))
         self.std_init = std_init
         self.reset_parameters()
 
@@ -67,22 +68,25 @@ class NLSCDDDQN(nn.Module):
                 else: self.skip_projections.append(None)
 
     def forward(self, x):
+        outputs = [x]
         for i, layer in enumerate(self.hidden_layers):
             x = self.activation(layer(x))
             if self.skip_connections:
                 for (from_layer, to_layer) in self.skip_connections:
                     if to_layer == i + 1:
                         if from_layer == 0:
-                            projected_input = self.skip_projections[0]([x][from_layer])
-                            x += projected_input
-                        elif [x][from_layer].shape[1] == x.shape[1]:
-                            x += [x][from_layer]
-                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {[x][from_layer].shape} to current layer with shape {x.shape}")
-                [x].append(x)
+                            projected_input = self.skip_projections[0](outputs[from_layer])
+                            x = x + projected_input  # Avoid in-place operation
+                        elif outputs[from_layer].shape[1] == x.shape[1]:
+                            x = x + outputs[from_layer]  # Avoid in-place operation
+                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
+            outputs.append(x)
 
-        value = self.value_fc(x).expand(x.size(0), self.advantage_fc.out_features)
-        advantage = self.advantage_fc(x) - self.advantage_fc(x).mean(dim=1, keepdim=True)
-        return value + advantage
+        value = self.value_fc(x)
+        advantage = self.advantage_fc(x)
+        advantage_mean = advantage.mean(dim=1, keepdim=True)
+        q_values = value + (advantage - advantage_mean)
+        return q_values
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
@@ -101,7 +105,10 @@ class DQNAgent:
     def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
 
     def act(self, state):
-        state = torch.FloatTensor(state).unsqueeze(0).to(device)
+        # Ensure state is the correct shape
+        if len(state.shape) == 1:
+            state = state.reshape(1, -1)
+        state = torch.FloatTensor(state).to(device)
         with torch.no_grad(): q_values = self.model(state)
         return torch.argmax(q_values).item()
 
@@ -129,31 +136,33 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
-def saveModel(self, filename):
-    filename = f"{self.name}_{self.steps}.pth"
-    if not os.path.exists("models"): os.makedirs("models")
-    model_path = os.path.join("models", filename)
-    torch.save({
-        'model_state_dict': agent.model.state_dict(),
-        'optimizer_state_dict': agent.optimizer.state_dict(),
-        'self.steps': agent.steps,
-    }, model_path)
+    def saveModel(self):
+        filename = f"{self.name}_{self.steps}.pth"
+        if not os.path.exists("models"): os.makedirs("models")
+        model_path = os.path.join("models", filename)
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps': self.steps,
+        }, model_path)
 
-def loadModel(self, filename):
-    filename = f"{self.name}_{self.steps}.pth"
-    if not os.path.exists("models"): os.makedirs("models")
-    model_path = os.path.join("models", filename)
-    if os.path.exists(model_path):
-        checkpoint = torch.load(model_path)
-        agent.model.load_state_dict(checkpoint['model_state_dict'])
-        agent.target_model.load_state_dict(checkpoint['model_state_dict'])
-        agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        agent.steps = checkpoint['self.steps']
-        print(f"Model loaded from {model_path}")
-    else: raise Exception(f"Model not found in {model_path}")
+    def loadModel(self):
+        filename = f"{self.name}_{self.steps}.pth"
+        if not os.path.exists("models"): os.makedirs("models")
+        model_path = os.path.join("models", filename)
+        if os.path.exists(model_path):
+            checkpoint = torch.load(model_path)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.target_model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.steps = checkpoint['steps']
+            print(f"Model loaded from {model_path}")
+        else: raise Exception(f"Model not found in {model_path}")
 
-running = True
 class Game():
+    def __init__(self):
+        self.resetGame()
+    
     def resetShells(self):
         """Adds a random number of live and blank shells to the shotgun."""
         self.live_shells, self.blank_shells = random.randint(1, 4), random.randint(1, 4)
@@ -162,25 +171,20 @@ class Game():
         
     def restockItems(self):
         """Restocks the round for the AI and DEALER."""
-        #remove all 0s from both lists
         self.AI_items = list(filter(None, self.AI_items))
         self.DEALER_items = list(filter(None, self.DEALER_items))
         for _ in range(4):
-            if len(self.AI_items) <= 8: self.AI_items.append(random.randint(1, 6))
-            if len(self.DEALER_items) <= 8: self.DEALER_items.append(random.randint(1, 6))
+            if len(self.AI_items) < 8: self.AI_items.append(random.randint(1, 6))
+            if len(self.DEALER_items) < 8: self.DEALER_items.append(random.randint(1, 6))
             
-        while len(self.AI_items) <= 8: self.AI_items.append(0)
-        while len(self.DEALER_items) <= 8: self.DEALER_items.append(0)
+        while len(self.AI_items) < 8: self.AI_items.append(0)
+        while len(self.DEALER_items) < 8: self.DEALER_items.append(0)
     
     def totalShells(self): return self.live_shells + self.blank_shells
     
-    def determineShell(self):
-        """Determines the type of self.shell in the current chamber, returns 1 for live and 0.5 for blank."""
-        return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
+    def determineShell(self): return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
     
-    def riggedDetermine(self, live: bool):
-        """Determines the self.shell to be the chosen self.shell."""
-        return 1 if live else 0.5
+    def riggedDetermine(self, live: bool): return 1 if live else 0.5
     
     def removeShell(self, live: bool):
         if live: self.live_shells -= 1
@@ -193,15 +197,12 @@ class Game():
     def resetGame(self):
         """Resets the game state, initializes the shotgun, and loads bullets."""
         self.resetShells()
-        self.AI_items = [] = self.DEALER_items = [] # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
+        self.AI_items = []
+        self.DEALER_items = []  # 0:nothing, 1:beer 2:magnifier 3:smoke 4:inverter 5:cuffs 6:saw
         self.AI_hp = self.DEALER_hp = 4
         self.AI_can_play = self.DEALER_can_play = True
         self.invert_odds = self.is_sawed = False
         self.restockItems()
-        
-    def getState(self): return np.array([self.AI_hp/4] + [self.DEALER_hp/4] + [self.live_shells/4] + [self.blank_shells/4] + [self.shell] + 
-                                        [self.current_round_num/8] + [item/6 for item in self.AI_items] + [item/6 for item in self.DEALER_items],
-                                        dtype=np.float16)
     
     def debugPrintGame(self):
         """Prints the current game state for debugging and visualization."""
@@ -224,6 +225,7 @@ class Game():
         if player:
             if 1 in self.AI_items:
                 self.AI_items.remove(1)
+                self.AI_items.append(0)
                 if self.shell == 0: self.removeUnknownShell()
                 elif self.shell == 1: self.live_shells -= 1
                 else: self.blank_shells -= 1
@@ -231,6 +233,7 @@ class Game():
             else: return -1
         elif 1 in self.DEALER_items: 
             self.DEALER_items.remove(1)
+            self.DEALER_items.append(0)
             self.removeUnknownShell()
             
     def magnifier(self, player: bool = False):
@@ -238,10 +241,13 @@ class Game():
         if player:
             if 2 in self.AI_items:
                 self.AI_items.remove(2)
+                self.AI_items.append(0)
                 self.shell = self.determineShell()
                 return 1
             else: return -1
-        elif 2 in self.DEALER_items: self.DEALER_items.remove(2)           
+        elif 2 in self.DEALER_items: 
+            self.DEALER_items.remove(2)
+            self.DEALER_items.append(0)
     
     def smoke(self, player: bool = False):
         """Player smokes, regains 1 hp, returns reward."""
@@ -249,11 +255,13 @@ class Game():
             
             if 3 in self.AI_items:
                 self.AI_items.remove(3)
+                self.AI_items.append(0)
                 self.AI_hp = min(4, self.AI_hp+1)
                 return 1
             else: return -1
         elif 3 in self.DEALER_items:
                 self.DEALER_items.remove(3)
+                self.DEALER_items.append(0)
                 self.DEALER_hp = min(4, self.DEALER_hp+1)
     
     def invert(self):
@@ -266,23 +274,28 @@ class Game():
         if player:
             if 4 in self.AI_items:
                 self.AI_items.remove(4)
+                self.AI_items.append(0)
                 if self.shell == 0.5: self.blank_shells -= 1; self.live_shells += 1
                 elif self.shell == 1: self.blank_shells += 1; self.live_shells -= 1
                 self.invert()
                 return 0.2
             else: return -1
-        elif 4 in self.DEALER_items: self.DEALER_items.remove(4)
+        elif 4 in self.DEALER_items: 
+            self.DEALER_items.remove(4)
+            self.DEALER_items.append(0)
     
     def cuff(self, player: bool = False):
         """Player cuffs opponent, skipping their turn, returns reward."""
         if player:
             if 5 in self.AI_items:
                 self.AI_items.remove(5)
+                self.AI_items.append(0)
                 self.DEALER_can_play = False
                 return 1
             else: return -1
         elif 5 in self.DEALER_items:
                 self.DEALER_items.remove(5)
+                self.DEALER_items.append(0)
                 self.AI_can_play = False
     
     def saw(self, player: bool = False):
@@ -290,11 +303,13 @@ class Game():
         if player:
             if 6 in self.AI_items:
                 self.AI_items.remove(6)
+                self.AI_items.append(0)
                 self.is_sawed = True
                 return 1 if self.shell != 0.5 else -2
             else: return -1
-        elif 5 in self.DEALER_items:
-                self.DEALER_items.remove(5)
+        elif 6 in self.DEALER_items:
+                self.DEALER_items.remove(6)
+                self.DEALER_items.append(0)
                 self.is_sawed = True
     
     def AIshootAI(self):
@@ -315,10 +330,14 @@ class Game():
         if self.shell == 0:
             self.shell = self.determineShell()
             if self.shell == 1:
+                self.live_shells -= 1
                 if not self.is_sawed: self.DEALER_hp -= 1; return 3
                 else: self.DEALER_hp -= 2; return 6
-            else: return 0
+            else: 
+                self.blank_shells -= 1
+                return 0
         elif self.shell == 1:
+            self.live_shells -= 1
             if not self.is_sawed: self.DEALER_hp -= 1; return 4
             else: self.DEALER_hp -= 2; return 8
         else: return -20 if not self.is_sawed else -32
@@ -387,9 +406,22 @@ class Game():
             elif random.random() < 0.4: self.normalCheat()
             else: self.dontCheat()
         else: self.dontCheat()
+        
+    def getState(self):
+        return np.array([
+            self.AI_hp/4, self.DEALER_hp/4,
+            self.live_shells/4, self.blank_shells/4,
+            self.shell,
+            self.current_round_num/8,
+            self.is_sawed,
+            self.invert_odds,
+            *[item/6 for item in self.AI_items], 
+            *[item/6 for item in self.DEALER_items]
+        ], dtype=np.float16)
     
 def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
+    print(game.getState())
     state = game.getState()
     done = turn_done = False
     if game.AI_can_play:
@@ -426,5 +458,5 @@ while True:
         agent.steps = _steps
     else: playGame(agent, Game())
 
-    if agent.steps > 1_000_000: saveModel(agent); break
+    if agent.steps > 1_000_000: agent.saveModel(); break
     lastSteps = agent.steps
