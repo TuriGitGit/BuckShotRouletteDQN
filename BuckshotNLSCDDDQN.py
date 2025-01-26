@@ -5,159 +5,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from collections import deque
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu"); print(f"Using: {device}")
-
-class NoisyLinear(nn.Module):
-    def __init__(self, in_features, out_features, *,std_init=0.4):
-        super(NoisyLinear, self).__init__()
-        self.in_features, self.out_features = in_features, out_features
-        self.weight_mu = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
-        self.weight_sigma = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
-        self.bias_mu = nn.Parameter(torch.empty(self.out_features, device=device))
-        self.bias_sigma = nn.Parameter(torch.empty(self.out_features, device=device))
-        self.register_buffer("weight_epsilon", torch.empty(self.out_features, self.in_features, device=device))
-        self.register_buffer("bias_epsilon", torch.empty(self.out_features, device=device))
-        self.std_init = std_init
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        bound = 1 / self.weight_mu.size(1) ** 0.5
-        self.weight_mu.data.uniform_(-bound, bound)
-        self.weight_sigma.data.fill_(self.std_init / self.weight_mu.size(1) ** 0.5)
-        self.bias_mu.data.uniform_(-bound, bound)
-        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(0) ** 0.5)
-
-    def forward(self, x):
-        self.weight_epsilon.normal_()
-        self.bias_epsilon.normal_()
-        weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
-        bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
-        return torch.nn.functional.linear(x, weight, bias)
-    
-class NLSCDDDQN(nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
-                 skip_connections: list = [], activation: nn.Module = nn.ReLU(),
-                 use_noisy: bool = True, fully_noisy: bool = False, noise_std_init: float = 0.4):
-        """ Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
-        ------------- \n
-        Base DDDQN (inputs, outputs, hidden_dims) \n
-        Optional NLSC (noisy, fully noisy, noise, skip connections) \n
-        Misc (activation) """
-        super(NLSCDDDQN, self).__init__()
-        self.hidden_dims = hidden_dims
-        self.activation = activation
-        self.skip_connections = skip_connections
-        self.use_noisy = True if (use_noisy or fully_noisy) else False
-        self.hidden_layers = nn.ModuleList()
-        self.skip_projections = nn.ModuleList()
-        prev_dim = input_dim
-        for hidden_dim in hidden_dims:
-            layer = NoisyLinear(prev_dim, hidden_dim, std_init=noise_std_init) if fully_noisy else nn.Linear(prev_dim, hidden_dim, device=device)
-            self.hidden_layers.append(layer)
-            prev_dim = hidden_dim
-        
-        self.value_fc = NoisyLinear(prev_dim, 1, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, 1, device=device)
-        self.advantage_fc = NoisyLinear(prev_dim, output_dim, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, output_dim, device=device)
-
-        if skip_connections:
-            for (from_layer, to_layer) in self.skip_connections:
-                if from_layer == 0:
-                    projection_layer = (NoisyLinear(input_dim, hidden_dims[to_layer - 1]) if fully_noisy else nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
-                    self.skip_projections.append(projection_layer)
-                else: self.skip_projections.append(None)
-
-    def forward(self, x):
-        outputs = [x]
-        for i, layer in enumerate(self.hidden_layers):
-            x = self.activation(layer(x))
-            if self.skip_connections:
-                for (from_layer, to_layer) in self.skip_connections:
-                    if to_layer == i + 1:
-                        if from_layer == 0:
-                            projected_input = self.skip_projections[0](outputs[from_layer])
-                            x = x + projected_input  # Avoid in-place operation
-                        elif outputs[from_layer].shape[1] == x.shape[1]:
-                            x = x + outputs[from_layer]  # Avoid in-place operation
-                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
-            outputs.append(x)
-
-        value = self.value_fc(x)
-        advantage = self.advantage_fc(x)
-        advantage_mean = advantage.mean(dim=1, keepdim=True)
-        q_values = value + (advantage - advantage_mean)
-        return q_values
-
-class DQNAgent:
-    def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v0.4.9"
-        self.inputs, self.outputs = inputs, outputs
-        self.memory_size = 150_000
-        self.batch_size = 256
-        self.memory = deque(maxlen=self.memory_size)
-        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
-        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)
-        self.loss_fn = nn.MSELoss().to(device)
-        self.steps = 0
-        self.updateTargetNetwork()
-
-    def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
-
-    def act(self, state):
-        # Ensure state is the correct shape
-        if len(state.shape) == 1:
-            state = state.reshape(1, -1)
-        state = torch.FloatTensor(state).to(device)
-        with torch.no_grad(): q_values = self.model(state)
-        return torch.argmax(q_values).item()
-
-    def remember(self, state, action, reward, next_state, done):
-        experience = (state, action, reward, next_state, done)
-        self.memory.append(experience)
-
-    def replay(self):
-        if len(self.memory) < self.batch_size: return
-        
-        batch = random.sample(self.memory, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
-        states = torch.FloatTensor(np.array(states)).to(device)
-        actions = torch.LongTensor(actions).unsqueeze(1).to(device)
-        rewards = torch.FloatTensor(rewards).to(device)
-        next_states = torch.FloatTensor(np.array(next_states)).to(device)
-        dones = torch.FloatTensor(dones).to(device)
-        q_values = self.model(states).gather(1, actions).squeeze()
-        with torch.no_grad():
-            max_next_q_values = self.target_model(next_states).max(1)[0]
-            target_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
-            
-        loss = self.loss_fn(q_values, target_q_values)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-    def saveModel(self):
-        filename = f"{self.name}_{self.steps}.pth"
-        if not os.path.exists("models"): os.makedirs("models")
-        model_path = os.path.join("models", filename)
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'steps': self.steps,
-        }, model_path)
-
-    def loadModel(self):
-        filename = f"{self.name}_{self.steps}.pth"
-        if not os.path.exists("models"): os.makedirs("models")
-        model_path = os.path.join("models", filename)
-        if os.path.exists(model_path):
-            checkpoint = torch.load(model_path)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.target_model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            self.steps = checkpoint['steps']
-            print(f"Model loaded from {model_path}")
-        else: raise Exception(f"Model not found in {model_path}")
 
 class Game():
     def __init__(self):
@@ -418,10 +268,161 @@ class Game():
             *[item/6 for item in self.AI_items], 
             *[item/6 for item in self.DEALER_items]
         ], dtype=np.float16)
+        
+class NoisyLinear(nn.Module):
+    def __init__(self, in_features, out_features, *,std_init=0.4):
+        super(NoisyLinear, self).__init__()
+        self.in_features, self.out_features = in_features, out_features
+        self.weight_mu = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
+        self.weight_sigma = nn.Parameter(torch.empty(self.out_features, self.in_features, device=device))
+        self.bias_mu = nn.Parameter(torch.empty(self.out_features, device=device))
+        self.bias_sigma = nn.Parameter(torch.empty(self.out_features, device=device))
+        self.register_buffer("weight_epsilon", torch.empty(self.out_features, self.in_features, device=device))
+        self.register_buffer("bias_epsilon", torch.empty(self.out_features, device=device))
+        self.std_init = std_init
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        bound = 1 / self.weight_mu.size(1) ** 0.5
+        self.weight_mu.data.uniform_(-bound, bound)
+        self.weight_sigma.data.fill_(self.std_init / self.weight_mu.size(1) ** 0.5)
+        self.bias_mu.data.uniform_(-bound, bound)
+        self.bias_sigma.data.fill_(self.std_init / self.bias_mu.size(0) ** 0.5)
+
+    def forward(self, x):
+        self.weight_epsilon.normal_()
+        self.bias_epsilon.normal_()
+        weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
+        bias = self.bias_mu + self.bias_sigma * self.bias_epsilon
+        return torch.nn.functional.linear(x, weight, bias)
+    
+class NLSCDDDQN(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
+                 skip_connections: list = [], activation: nn.Module = nn.ReLU(),
+                 use_noisy: bool = True, fully_noisy: bool = False, noise_std_init: float = 0.4):
+        """ Noisy Linear Skip-Connected Dueling Double Deep Q Network \n
+        ------------- \n
+        Base DDDQN (inputs, outputs, hidden_dims) \n
+        Optional NLSC (noisy, fully noisy, noise, skip connections) \n
+        Misc (activation) """
+        super(NLSCDDDQN, self).__init__()
+        self.hidden_dims = hidden_dims
+        self.activation = activation
+        self.skip_connections = skip_connections
+        self.use_noisy = True if (use_noisy or fully_noisy) else False
+        self.hidden_layers = nn.ModuleList()
+        self.skip_projections = nn.ModuleList()
+        prev_dim = input_dim
+        for hidden_dim in hidden_dims:
+            layer = NoisyLinear(prev_dim, hidden_dim, std_init=noise_std_init) if fully_noisy else nn.Linear(prev_dim, hidden_dim, device=device)
+            self.hidden_layers.append(layer)
+            prev_dim = hidden_dim
+        
+        self.value_fc = NoisyLinear(prev_dim, 1, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, 1, device=device)
+        self.advantage_fc = NoisyLinear(prev_dim, output_dim, std_init=noise_std_init) if use_noisy else nn.Linear(prev_dim, output_dim, device=device)
+
+        if skip_connections:
+            for (from_layer, to_layer) in self.skip_connections:
+                if from_layer == 0:
+                    projection_layer = (NoisyLinear(input_dim, hidden_dims[to_layer - 1]) if fully_noisy else nn.Linear(input_dim, hidden_dims[to_layer - 1], device=device))
+                    self.skip_projections.append(projection_layer)
+                else: self.skip_projections.append(None)
+
+    def forward(self, x):
+        outputs = [x]
+        for i, layer in enumerate(self.hidden_layers):
+            x = self.activation(layer(x))
+            if self.skip_connections:
+                for (from_layer, to_layer) in self.skip_connections:
+                    if to_layer == i + 1:
+                        if from_layer == 0:
+                            projected_input = self.skip_projections[0](outputs[from_layer])
+                            x = x + projected_input  # Avoid in-place operation
+                        elif outputs[from_layer].shape[1] == x.shape[1]:
+                            x = x + outputs[from_layer]  # Avoid in-place operation
+                        else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
+            outputs.append(x)
+
+        value = self.value_fc(x)
+        advantage = self.advantage_fc(x)
+        advantage_mean = advantage.mean(dim=1, keepdim=True)
+        q_values = value + (advantage - advantage_mean)
+        return q_values
+
+class DQNAgent:
+    def __init__(self, inputs, outputs):
+        self.name = "Buck_NLSCDDDQN_v1a.1.1"
+        self.inputs, self.outputs = inputs, outputs
+        self.memory_size = 150_000
+        self.batch_size = 12000000
+        self.memory = deque(maxlen=self.memory_size)
+        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
+        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0006)
+        self.loss_fn = nn.MSELoss().to(device)
+        self.steps = 0
+        self.updateTargetNetwork()
+
+    def updateTargetNetwork(self): self.target_model.load_state_dict(self.model.state_dict())
+
+    def act(self, state):
+        # Ensure state is the correct shape
+        if len(state.shape) == 1:
+            state = state.reshape(1, -1)
+        state = torch.FloatTensor(state).to(device)
+        with torch.no_grad(): q_values = self.model(state)
+        return torch.argmax(q_values).item()
+
+    def remember(self, state, action, reward, next_state, done):
+        experience = (state, action, reward, next_state, done)
+        self.memory.append(experience)
+
+    def replay(self):
+        self.steps += 1
+        if len(self.memory) < self.batch_size: return
+        
+        batch = random.sample(self.memory, self.batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        states = torch.FloatTensor(np.array(states)).to(device)
+        actions = torch.LongTensor(actions).unsqueeze(1).to(device)
+        rewards = torch.FloatTensor(rewards).to(device)
+        next_states = torch.FloatTensor(np.array(next_states)).to(device)
+        dones = torch.FloatTensor(dones).to(device)
+        q_values = self.model(states).gather(1, actions).squeeze()
+        with torch.no_grad():
+            max_next_q_values = self.target_model(next_states).max(1)[0]
+            target_q_values = rewards + (1 - dones) * 0.99 * max_next_q_values
+            
+        loss = self.loss_fn(q_values, target_q_values)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+    def saveModel(self):
+        filename = f"{self.name}_{self.steps}.pth"
+        if not os.path.exists("models"): os.makedirs("models")
+        model_path = os.path.join("models", filename)
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'steps': self.steps,
+        }, model_path)
+
+    def loadModel(self):
+        filename = f"{self.name}_{self.steps}.pth"
+        if not os.path.exists("models"): os.makedirs("models")
+        model_path = os.path.join("models", filename)
+        if os.path.exists(model_path):
+            checkpoint = torch.load(model_path)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.target_model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.steps = checkpoint['steps']
+            print(f"Model loaded from {model_path}")
+        else: raise Exception(f"Model not found in {model_path}")
     
 def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
-    print(game.getState())
     state = game.getState()
     done = turn_done = False
     if game.AI_can_play:
@@ -442,20 +443,20 @@ def playGame(agent: DQNAgent, game: Game):
             agent.remember(state, action, reward, next_state, done)
             state = next_state
             agent.replay()
-            if agent.steps % 10 == 0: agent.updateTargetNetwork()
+            if agent.steps % 300 == 0: agent.updateTargetNetwork()
     else: game.AI_can_play = True
     
     if game.DEALER_can_play: game.DEALERalgo()
     else: game.DEALER_can_play = True
 
 agent = DQNAgent(24, 8); lastSteps = e = 0
+start_time = time.time()
 while True:
     e += 1
-    if (e) % 10 == 0:
-        _steps = agent.steps
-        for ep in range(20): playGame(agent, Game())
-        print(f"{(agent.steps - lastSteps) // 20}")
-        agent.steps = _steps
+    if e > 10: print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
+    if (e) % 100 == 0:
+        for ep in range(4): playGame(agent, Game())
+        print(f"{(agent.steps - lastSteps) // 4}")
     else: playGame(agent, Game())
 
     if agent.steps > 1_000_000: agent.saveModel(); break
