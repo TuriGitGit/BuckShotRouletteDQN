@@ -335,28 +335,25 @@ class NLSCDDDQN(nn.Module):
             if self.skip_connections:
                 for (from_layer, to_layer) in self.skip_connections:
                     if to_layer == i + 1:
-                        if from_layer == 0:
-                            projected_input = self.skip_projections[0](outputs[from_layer])
-                            x = x + projected_input  # Avoid in-place operation
-                        elif outputs[from_layer].shape[1] == x.shape[1]:
-                            x = x + outputs[from_layer]  # Avoid in-place operation
+                        if from_layer == 0: x = x + self.skip_projections[0](outputs[from_layer])
+                        elif outputs[from_layer].shape[1] == x.shape[1]: x = x + outputs[from_layer]
                         else: raise ValueError(f"Shape mismatch: cannot add output from layer {from_layer} with shape {outputs[from_layer].shape} to current layer with shape {x.shape}")
+                        
             outputs.append(x)
 
         value = self.value_fc(x)
         advantage = self.advantage_fc(x)
         advantage_mean = advantage.mean(dim=1, keepdim=True)
-        q_values = value + (advantage - advantage_mean)
-        return q_values
+        return value + (advantage - advantage_mean)
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v1a.2.1"
+        self.name = "Buck_NLSCDDDQN_v1a.3.1"
         self.inputs, self.outputs = inputs, outputs
-        self.batch_size = 3200000
+        self.batch_size = 32
         self.memory = deque(maxlen=100_000)
-        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
-        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], skip_connections=[(0,3)], use_noisy=True).to(device)
+        self.model = NLSCDDDQN(inputs, outputs, [80, 80, 80], use_noisy=True).to(device)
+        self.target_model = NLSCDDDQN(inputs, outputs, [80, 80, 80], use_noisy=True).to(device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.loss_fn = nn.MSELoss().to(device)
         self.steps = 0
@@ -416,7 +413,6 @@ class DQNAgent:
             self.target_model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.steps = checkpoint['steps']
-            print(f"Model loaded from {model_path}")
         else: raise Exception(f"Model not found in {model_path}")
     
 def playGame(agent: DQNAgent, game: Game):
@@ -447,6 +443,108 @@ def playGame(agent: DQNAgent, game: Game):
     if game.DEALER_can_play: game.DEALERalgo()
     else: game.DEALER_can_play = True
 
+def testPerf():
+    """Test raw environment performance without DQN overhead."""
+    game = Game()
+    iterations = 10_000_000
+    start_time = time.time()
+    game.getState()
+    for i in range(iterations):
+        if game.AI_can_play:
+            game.smoke(player=True)
+            
+        if game.DEALER_can_play:
+            #game.DEALERalgo()
+            pass
+        else: game.DEALER_can_play = True
+            
+        if i % 100000 == 0:
+            current_time = time.time() - start_time
+            steps_per_second = i / current_time if current_time > 0 else 0
+            print(f"Steps per second: {steps_per_second:.2f}")
+    
+    total_time = time.time() - start_time
+    final_sps = iterations / total_time
+    print(f"\nFinal Performance:")
+    print(f"Total steps: {iterations}")
+    print(f"Total time: {total_time:.2f} seconds")
+    print(f"Average steps per second: {final_sps:.2f}")
+    
+def testPerfNAI():
+    game = Game()
+    iterations = 10_000_000
+    start_time = time.time()
+    game.getState()
+    done = turn_done = False
+    for i in range(iterations):
+        if game.AI_can_play:
+            game.AIshootDEALER()
+            
+            next_state = game.getState()
+            state = next_state
+        else: game.AI_can_play = True
+        
+        if game.DEALER_can_play: game.DEALERalgo()
+        else: game.DEALER_can_play = True
+        
+        if i % 100000 == 0:
+            current_time = time.time() - start_time
+            steps_per_second = i / current_time if current_time > 0 else 0
+            print(f"Steps per second: {steps_per_second:.2f}")
+    
+    total_time = time.time() - start_time
+    final_sps = iterations / total_time
+    print(f"\nFinal Performance:")
+    print(f"Total steps: {iterations}")
+    print(f"Total time: {total_time:.2f} seconds")
+    print(f"Average steps per second: {final_sps:.2f}")
+         
+def testPerfAI(agent: DQNAgent, game: Game):
+    iterations = 10_000_000
+    start_time = time.time()
+    for i in range(iterations):
+        game.resetGame()
+        state = game.getState()
+        done = turn_done = False
+        if game.AI_can_play:
+            while not turn_done:
+                action = agent.act(state)
+                match action:
+                    case 0: reward = game.AIshootDEALER(); turn_done = True
+                    case 1: reward = game.smoke(player=True)
+                    case 2: reward = game.magnifier(player=True)
+                    case 3: reward = game.drinkBeer(player=True)
+                    case 4: reward = game.inverter(player=True)
+                    case 5: reward = game.cuff(player=True)
+                    case 6: reward = game.saw(player=True)
+                    case 7: reward = game.AIshootAI(); turn_done = True
+                    case _: raise Exception(f"Invalid action: {action}")
+                
+                next_state = game.getState()
+                agent.remember(state, action, reward, next_state, done)
+                state = next_state
+                agent.replay()
+                if agent.steps % 300 == 0: agent.updateTargetNetwork()
+        else: game.AI_can_play = True
+        
+        if game.DEALER_can_play: game.DEALERalgo()
+        else: game.DEALER_can_play = True
+        
+        if i % 10 == 0:
+            current_time = time.time() - start_time
+            steps_per_second = i / current_time if current_time > 0 else 0
+            print(f"Steps per second: {steps_per_second:.2f}")
+    
+    total_time = time.time() - start_time
+    final_sps = iterations / total_time
+    print(f"\nFinal Performance:")
+    print(f"Total steps: {iterations}")
+    print(f"Total time: {total_time:.2f} seconds")
+    print(f"Average steps per second: {final_sps:.2f}")
+    
+testPerfAI(DQNAgent(24, 8), Game())
+
+"""
 agent = DQNAgent(24, 8); lastSteps = e = 0
 start_time = time.time()
 while True:
@@ -458,4 +556,4 @@ while True:
     else: playGame(agent, Game())
 
     if agent.steps > 1_000_000: agent.saveModel(); break
-    lastSteps = agent.steps
+    lastSteps = agent.steps"""
