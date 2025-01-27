@@ -39,8 +39,11 @@ class Game():
     def totalShells(self): 
         return self.live_shells + self.blank_shells
     
-    def determineShell(self): 
-        return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
+    def determineShell(self):
+        if not self.invert_odds:
+            return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
+        else:
+            return 1 if random.random() <= (self.blank_shells / self.shells) else 0.5
     
     def riggedDetermine(self, live: bool): 
         return 1 if live else 0.5
@@ -79,17 +82,12 @@ class Game():
         print("================\n")
     
     def removeUnknownShell(self):
-        """Safely remove a random shell, reset if none available"""  
         if self.determineShell() == 1:
-            if self.live_shells > 0:
-                self.live_shells -= 1
-            else:
-                self.outOfShells()
+            self.live_shells -= 1
+            self.shell = 0
         else:
-            if self.blank_shells > 0:
-                self.blank_shells -= 1
-            else:
-                self.outOfShells()
+            self.blank_shells -= 1
+            self.shell = 0
             
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
@@ -110,10 +108,12 @@ class Game():
                 elif self.shell == 1:
                     if self.live_shells > 0:
                         self.live_shells -= 1
+                        self.shell = 0
                     else:
                         raise Exception("the shell is live, but there are no live shells")
                 else:
                     self.blank_shells -= 1
+                    self.shell = 0
                 return -1
             
             else:
@@ -147,7 +147,7 @@ class Game():
                 self.AI_items.append(0)
                 if self.AI_hp < 4:
                     self.AI_hp += 1
-                    return 5 
+                    return 5
                 else:
                     return -5
                 
@@ -641,14 +641,12 @@ def testPerfNAI():
     i = 0
     start_time = time.time()
     game.getState()
-    done = turn_done = False
     while i < iterations:
         if game.AI_can_play:
             i+=1
             game.AIshootDEALER()
             
-            next_state = game.getState()
-            state = next_state
+            game.getState()
         else: game.AI_can_play = True
         
         if game.DEALER_can_play:
@@ -685,17 +683,17 @@ def testPerfAI():
                 action = agent.act(state)
                 match action:
                     case 0:
-                        reward = game.AIshootDEALER() * 2
+                        reward = game.AIshootDEALER()
                     case 1:
-                        reward = game.smoke(player=True) * 3
+                        reward = game.smoke(player=True)
                     case 2:
-                        reward = game.magnifier(player=True) * 2
+                        reward = game.magnifier(player=True)
                     case 3:
                         reward = game.drinkBeer(player=True)
                     case 4:
                         reward = game.inverter(player=True)
                     case 5:
-                        reward = game.cuff(player=True) * 2
+                        reward = game.cuff(player=True)
                     case 6:
                         reward = game.saw(player=True)
                     case 7:
