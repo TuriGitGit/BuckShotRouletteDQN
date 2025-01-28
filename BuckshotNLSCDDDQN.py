@@ -463,7 +463,7 @@ class SCDDDQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, inputs, outputs):
-        self.name = "DQNAgent_v1a.5.3"
+        self.name = "DQNAgent_v1b.1.2"
         self.inputs = inputs
         self.outputs = outputs
         self.gamma = 0.92
@@ -541,7 +541,7 @@ class DQNAgent:
         }, model_path)
 
     def loadModel(self):
-        filename = f"{self.name}_{self.steps}.pth"
+        filename = f"DQNAgent_v1a.5.3_17007.pth"
         if not os.path.exists("models"):
             os.makedirs("models")
             
@@ -595,7 +595,6 @@ def playGame(agent: DQNAgent, game: Game):
                     case 7:
                         #print("AI shoots self")
                         reward = game.AIshootAI()
-                        turn_done = True
                     case _:
                         raise Exception(f"Invalid action: {action}")
                     
@@ -617,7 +616,7 @@ def playGame(agent: DQNAgent, game: Game):
                 agent.remember(state, action, reward, next_state, done)
                 state = next_state
                 agent.replay()
-                print(reward)
+                #print(reward)
                 rewards.append(reward)
                 if (agent.steps + 1) % 200 == 0:
                     agent.updateTargetNetwork()
@@ -742,15 +741,133 @@ def testPerfAI():
     print(f"Total time: {total_time:.2f} seconds")
     print(f"Average steps per second: {final_sps:.1f}")
 
-agent = DQNAgent(24, 8)
-e = 0
-start_time = time.time()
-time.sleep(1)
-while True:
-    e += 1
-    playGame(agent, Game())
-    #print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
+def humanVsAI():
+    """Play against a trained AI agent."""
+    agent = DQNAgent(24, 8)
+    agent.loadModel()
+    game = Game()
+    
+    action_map = {
+        '1': 'Shoot DEALER',
+        '2': 'Use Smoke (+1 HP)',
+        '3': 'Use Magnifier (See bullet)',
+        '4': 'Drink Beer (Skip bullet)',
+        '5': 'Use Inverter (Flip odds)',
+        '6': 'Use Handcuffs (Skip enemy turn)',
+        '7': 'Use Saw (2x damage)',
+        '8': 'Shoot Self'
+    }
 
-    if agent.steps > 1_000_000:
-        agent.saveModel()
-        break
+    while True:
+        game.resetGame()
+        print("\n=== NEW GAME ===")
+        
+        while game.AI_hp > 0 and game.DEALER_hp > 0:
+            game.debugPrintGame()
+            
+            # Human turn
+            if game.AI_can_play:
+                print("\nYour turn! Available actions:")
+                for key, action in action_map.items():
+                    print(f"{key}: {action}")
+                
+                while True:
+                    game.debugPrintGame()
+                    try:
+                        choice = int(input("\nEnter action number: ")) - 1
+                        if 0 <= choice <= 7:
+                            match choice:
+                                case 0: game.AIshootDEALER(); break
+                                case 1: game.smoke(player=True)
+                                case 2: game.magnifier(player=True)
+                                case 3: game.drinkBeer(player=True)
+                                case 4: game.inverter(player=True)
+                                case 5: game.cuff(player=True)
+                                case 6: game.saw(player=True)
+                                case 7: game.AIshootAI()
+                            if choice in [0, 7]: break
+                        else:
+                            print("Invalid action number!")
+                    except ValueError:
+                        print("Please enter a valid number!")
+                
+                game.shell = 0
+                game.is_sawed = False
+                if game.totalShells() == 0:
+                    game.outOfShells()
+            else:
+                game.AI_can_play = True
+                print("Your turn was skipped (cuffed)")
+
+            # AI turn
+            if game.DEALER_can_play:
+                print("\nAI's turn...")
+                state = game.getState()
+                action = agent.act(state)
+                
+                match action:
+                    case 0:
+                        print("AI shoots you!")
+                        game.DEALERshootAI()
+                    case 1:
+                        print("AI uses smoke")
+                        game.smoke()
+                    case 2:
+                        print("AI uses magnifier")
+                        game.magnifier()
+                    case 3:
+                        print("AI drinks beer")
+                        game.drinkBeer()
+                    case 4:
+                        print("AI uses inverter")
+                        game.inverter()
+                    case 5:
+                        print("AI uses handcuffs")
+                        game.cuff()
+                    case 6:
+                        print("AI uses saw")
+                        game.saw()
+                    case 7:
+                        print("AI shoots itself!")
+                        game.DEALERshootDEALER()
+                
+                game.shell = 0
+                game.is_sawed = False
+                if game.totalShells() == 0:
+                    game.outOfShells()
+            else:
+                game.DEALER_can_play = True
+                print("AI's turn was skipped (cuffed)")
+
+        # Game over
+        print("\n=== GAME OVER ===")
+        if game.AI_hp <= 0:
+            print("You lost!")
+        else:
+            print("You won!")
+            
+        if input("\nPlay again? (y/n): ").lower() != 'y':
+            break
+
+# Add this to the bottom of the file to allow running the game directly
+if __name__ == "__main__":
+    print("Choose an option:")
+    print("1: Train AI")
+    print("2: Play vs AI")
+    
+    choice = input("Enter choice (1/2): ")
+    if choice == "1":
+        agent = DQNAgent(24, 8)
+        e = 0
+        start_time = time.time()
+        time.sleep(1)
+        while True:
+            e += 1
+            playGame(agent, Game())
+            #print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
+
+            if agent.steps > 17_000:
+                agent.saveModel()
+                break
+    elif choice == "2":
+        humanVsAI()
