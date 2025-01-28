@@ -41,9 +41,9 @@ class Game():
     
     def determineShell(self):
         if not self.invert_odds:
-            return 1 if random.random() <= (self.live_shells / self.shells) else 0.5
+            return 1 if random.random() <= (self.live_shells / self.totalShells()) else 0.5
         else:
-            return 1 if random.random() <= (self.blank_shells / self.shells) else 0.5
+            return 0.5 if random.random() <= (self.blank_shells / self.totalShells()) else 1
     
     def riggedDetermine(self, live: bool): 
         return 1 if live else 0.5
@@ -91,31 +91,30 @@ class Game():
             
     def drinkBeer(self, player: bool = False):
         """Player drinks beer, returns reward."""
-        
         if player:
             if 1 in self.AI_items:
-                if self.totalShells == 1:
+                if self.totalShells() == 1:
                     self.AI_items.remove(1)
                     self.AI_items.append(0)
                     self.outOfShells()
                     return 1 if self.shell == 0 else -1
-                
-                self.AI_items.remove(1)
-                self.AI_items.append(0)
-                if self.shell == 0:
-                    self.removeUnknownShell()
-                    return 1
-                elif self.shell == 1:
-                    if self.live_shells > 0:
-                        self.live_shells -= 1
-                        self.shell = 0
-                    else:
-                        raise Exception("the shell is live, but there are no live shells")
                 else:
-                    self.blank_shells -= 1
-                    self.shell = 0
-                return -1
-            
+                    self.AI_items.remove(1)
+                    self.AI_items.append(0)
+                    if self.shell == 0:
+                        self.removeUnknownShell()
+                        return 1
+                    elif self.shell == 1:
+                        if self.live_shells > 0:
+                            self.live_shells -= 1
+                            self.shell = 0
+                        else:
+                            raise Exception("the shell is live, but there are no live shells")
+                    else:
+                        self.blank_shells -= 1
+                        self.shell = 0
+                    return -1
+                
             else:
                 return -10
             
@@ -338,10 +337,8 @@ class Game():
         self.cuff()
         self.saw()
         self.DEALERshootAI()
-        self.drinkBeer()
 
     def guessBlank(self):
-        self.drinkBeer()
         self.inverter()
         self.DEALERSmoke()
         self.DEALERshootDEALER()
@@ -409,7 +406,7 @@ class NoisyLinear(nn.Module):
         return torch.nn.functional.linear(x, weight, bias)
 
 
-class NLSCDDDQN(nn.Module):
+class SCDDDQN(nn.Module):
     
     def __init__(self, input_dim: int, output_dim: int, hidden_dims: list, *,
                  skip_connections: list = [], activation: nn.Module = nn.ReLU(),
@@ -419,7 +416,7 @@ class NLSCDDDQN(nn.Module):
         Base DDDQN (inputs, outputs, hidden_dims) \n
         Optional NLSC (noisy, fully noisy, noise, skip connections) \n
         Misc (activation) """
-        super(NLSCDDDQN, self).__init__()
+        super(SCDDDQN, self).__init__()
         self.hidden_dims = hidden_dims
         self.activation = activation
         self.skip_connections = skip_connections
@@ -465,63 +462,66 @@ class NLSCDDDQN(nn.Module):
 
 
 class DQNAgent:
-    
     def __init__(self, inputs, outputs):
-        self.name = "Buck_NLSCDDDQN_v1a.3.1"
-        self.inputs, self.outputs = inputs, outputs
-        self.gamma = 0.99
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.batch_size = 256
+        self.name = "DQNAgent_v1a.5.3"
+        self.inputs = inputs
+        self.outputs = outputs
+        self.gamma = 0.92
+        self.alpha = 1
+        self.batch_size = 128
         self.memory = deque(maxlen=100_000)
-        self.model = NLSCDDDQN(inputs, outputs, [256, 256]).to(device)
-        self.target_model = NLSCDDDQN(inputs, outputs, [256, 256]).to(device)
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=0.0003)
+        self.model = SCDDDQN(inputs, outputs, [128, 128, 128]).to(device)
+        self.target_model = SCDDDQN(inputs, outputs, [128, 128, 128]).to(device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00006)
         self.loss_fn = nn.MSELoss().to(device)
         self.steps = 0
         self.updateTargetNetwork()
 
     def updateTargetNetwork(self):
+        """Copy weights from the online model to the target model."""
         self.target_model.load_state_dict(self.model.state_dict())
 
     def act(self, state):
+        """Sample actions using a stochastic softmax policy."""
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
         state = torch.FloatTensor(state).to(device)
-        if random.random() < self.epsilon:
-            return random.randint(0, self.outputs - 1)
-            
+
         with torch.no_grad():
-            q_values = self.model(state)
-        return torch.argmax(q_values).item()
+            q_values = self.model(state).squeeze()
+            probabilities = torch.softmax(q_values / self.alpha, dim=0)
+        return torch.multinomial(probabilities, 1).item()
 
     def remember(self, state, action, reward, next_state, done):
+        """Store experiences in memory."""
         experience = (state, action, reward, next_state, done)
         self.memory.append(experience)
 
     def replay(self):
+        """Perform a training step on a sampled batch."""
         if len(self.memory) < self.batch_size:
             return
-        
+
         batch = random.sample(self.memory, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
-        
+
         states = torch.FloatTensor(np.array(states)).to(device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(device)
         rewards = torch.FloatTensor(rewards).to(device)
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
         next_states = torch.FloatTensor(np.array(next_states)).to(device)
         dones = torch.FloatTensor(dones).to(device)
-        
+
+        # Normalize rewards for stability
+        #rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
+
         with torch.no_grad():
-            next_actions = self.model(next_states).max(1)[1].unsqueeze(1)
-            next_q_values = self.target_model(next_states).gather(1, next_actions).squeeze()
-            target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
+            next_q_values = self.target_model(next_states)
+            next_soft_q_values = self.alpha * torch.logsumexp(next_q_values / self.alpha, dim=1)
+            target_q_values = rewards + (1 - dones) * self.gamma * next_soft_q_values
 
         current_q_values = self.model(states).gather(1, actions).squeeze()
         loss = self.loss_fn(current_q_values, target_q_values)
-        
+
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
@@ -559,81 +559,90 @@ def playGame(agent: DQNAgent, game: Game):
     game.resetGame()
     state = game.getState()
     done = turn_done = False
-    rewards = deque(maxlen=600)
+    rewards = deque(maxlen=200)
     
     while game.AI_hp > 0 and game.DEALER_hp > 0:
         if game.AI_can_play:
             turn_done = False
             while not turn_done:
-                game.debugPrintGame()
-                time.sleep(1)
+                #game.debugPrintGame()
                 action = agent.act(state)
-                print(f"\nAI Action: {action}")
+                #print(f"\nAI Action: {action}")
                 
                 match action:
                     case 0:
-                        print("AI shoots DEALER")
+                        #print("AI shoots DEALER")
                         reward = game.AIshootDEALER()
                         turn_done = True
                     case 1:
-                        print("AI uses smoke")
+                        #print("AI uses smoke")
                         reward = game.smoke(player=True)
                     case 2:
-                        print("AI uses magnifier")
+                        #print("AI uses magnifier")
                         reward = game.magnifier(player=True)
                     case 3:
-                        print("AI drinks beer")
+                        #print("AI drinks beer")
                         reward = game.drinkBeer(player=True)
                     case 4:
-                        print("AI uses inverter")
+                        #print("AI uses inverter")
                         reward = game.inverter(player=True)
                     case 5:
-                        print("AI uses cuffs")
+                        #print("AI uses cuffs")
                         reward = game.cuff(player=True)
                     case 6:
-                        print("AI uses saw")
+                        #print("AI uses saw")
                         reward = game.saw(player=True)
                     case 7:
-                        print("AI shoots self")
+                        #print("AI shoots self")
                         reward = game.AIshootAI()
                         turn_done = True
                     case _:
                         raise Exception(f"Invalid action: {action}")
-                game.debugPrintGame()         
-                print(f"Reward: {reward}")
+                    
+                game.AI_did_play = True
+                
+                #game.debugPrintGame()         
+                #print(f"Reward: {reward}")
                 
                 if game.AI_hp <= 0:
                     reward -= 30
                     done = True
-                    print("AI died!")
+                    #print("AI died!")
                 elif game.DEALER_hp <= 0:
                     done = True
                     reward += 25
-                    print("DEALER died!")
+                    #print("DEALER died!")
                         
                 next_state = game.getState()
                 agent.remember(state, action, reward, next_state, done)
                 state = next_state
                 agent.replay()
+                print(reward)
                 rewards.append(reward)
-                if (agent.steps + 1) % 1 == 0:
+                if (agent.steps + 1) % 200 == 0:
                     agent.updateTargetNetwork()
                     avg_reward = sum(rewards) / len(rewards) if rewards else 0
-                    print(f"Average reward: {avg_reward:.4f}")
+                    print(f"{avg_reward:.4f}")
+                    
+            game.shell = 0 
             game.is_sawed = False
+            if game.totalShells() == 0:
+                game.outOfShells()
         else:
             game.AI_can_play = True
-            print("AI turn skipped (cuffed)")
+            #print("AI turn skipped (cuffed)")
 
         if game.DEALER_can_play:
-            time.sleep(1)
-            print("\nDEALER's turn:")
+            #print("\nDEALER's turn:")
             dealer_action = game.DEALERalgo()
-            print(f"DEALER performed {dealer_action} actions")
+            #print(f"DEALER performed {dealer_action} actions")
             game.is_sawed = False
+            game.shell = 0
+            if game.totalShells() == 0:
+                game.outOfShells()
         else:
             game.DEALER_can_play = True
-            print("DEALER turn skipped (cuffed)")
+            #print("DEALER turn skipped (cuffed)")
 
 def testPerfNAI():
     game = Game()
@@ -701,7 +710,9 @@ def testPerfAI():
                     case _:
                         raise Exception(f"Invalid action: {action}")
                     
+                game.shell = 0
                 game.AI_did_play = True
+                
                 next_state = game.getState()
                 agent.remember(state, action, reward, next_state, done)
                 agent.replay()
@@ -718,6 +729,7 @@ def testPerfAI():
         
         if game.DEALER_can_play:
             i += game.DEALERalgo()
+            game.shell = 0
             game.DEALER_did_play = True
         else:
             game.DEALER_can_play = True
@@ -729,8 +741,6 @@ def testPerfAI():
     print(f"Total steps: {iterations}")
     print(f"Total time: {total_time:.2f} seconds")
     print(f"Average steps per second: {final_sps:.1f}")
-    
-
 
 agent = DQNAgent(24, 8)
 e = 0
@@ -739,7 +749,7 @@ time.sleep(1)
 while True:
     e += 1
     playGame(agent, Game())
-    print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
+    #print(f"this took {time.time() - start_time} seconds, doing {agent.steps} steps, SPS = {agent.steps / (time.time() - start_time)}")
 
     if agent.steps > 1_000_000:
         agent.saveModel()
