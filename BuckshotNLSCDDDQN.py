@@ -126,6 +126,8 @@ class Game():
     def magnifier(self, player: bool = False):
         """Player breaks glass, determining self.shell, returns reward."""
         if player:
+            if self.shell != 0:
+                return -10
             if 2 in self.AI_items:
                 self.AI_items.remove(2)
                 self.AI_items.append(0)
